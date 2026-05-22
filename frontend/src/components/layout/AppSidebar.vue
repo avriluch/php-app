@@ -91,9 +91,9 @@ const isActive = (to) => route.path === to || route.path.startsWith(to + '/')
     <!-- User footer -->
     <div class="px-3 py-4 border-t border-neutral-100 shrink-0">
       <div class="flex items-center gap-3">
-        <AppAvatar :name="auth.user?.name" size="sm" />
+        <AppAvatar :name="auth.displayName" size="sm" />
         <div v-if="ui.sidebarOpen" class="overflow-hidden">
-          <p class="text-sm font-medium text-neutral-900 truncate">{{ auth.user?.name }}</p>
+          <p class="text-sm font-medium text-neutral-900 truncate">{{ auth.displayName }}</p>
           <p class="text-xs text-neutral-500 truncate">{{ auth.user?.email }}</p>
         </div>
       </div>

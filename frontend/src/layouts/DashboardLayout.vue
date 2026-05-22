@@ -33,8 +33,8 @@ const auth = useAuthStore()
 
           <!-- Avatar / nombre -->
           <RouterLink to="/profile" class="flex items-center gap-2 no-underline">
-            <AppAvatar :name="auth.user?.name" size="sm" />
-            <span class="hidden sm:block text-sm font-medium text-neutral-700">{{ auth.user?.name }}</span>
+            <AppAvatar :name="auth.displayName" size="sm" />
+            <span class="hidden sm:block text-sm font-medium text-neutral-700">{{ auth.displayName }}</span>
           </RouterLink>
         </div>
       </header>

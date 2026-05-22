@@ -1,25 +1,46 @@
-# php-app
+# php-app — Plataforma de servicios profesionales
 
-## Pre-requisitos
+Monorepo desacoplado:
 
-Algunos pre-requisitos a tener en cuenta
+| Carpeta | Stack |
+|---------|--------|
+| [`frontend/`](frontend/) | Vue 3 + Vite + Pinia |
+| [`backend/`](backend/) | Laravel 11 API + Sanctum |
+| [`docs/`](docs/) | Contrato API (`api-contract-v0.md`) |
 
-### Instalar XAMP
-[Acá el link](https://www.apachefriends.org/)
+## Inicio rápido
 
-### Para el front
+### 1. Backend (XAMPP + Composer)
 
-- Instalar Node.js, con el instalador de windows. [Link](https://nodejs.org/es/download). El instalador es el que dice `Windows Installer (.msi)`
+Ver [`backend/README.md`](backend/README.md):
 
-- Verificar que todo se haya instalado correctamente (desde powershell):
-```bash
+```powershell
+cd backend
+composer install
+copy .env.example .env
+php artisan key:generate
+php artisan migrate --seed
+php artisan serve
+```
+
+### 2. Frontend
+
+```powershell
+cd frontend
+copy .env.example .env
+npm install
+npm run dev
+```
+
+### Pre-requisitos
+
+- [XAMPP](https://www.apachefriends.org/) (PHP + MySQL)
+- [Composer](https://getcomposer.org/download/)
+- [Node.js](https://nodejs.org/es/download) (LTS)
+
+```powershell
+php -v
+composer -V
 node -v
 npm -v
-```
-(Si sale un mensaje de error con npm avisar, se soluciona dando unos permisos desde Powershell como administrador)
-
-- Desde Visual, en la terminal, moverse a la carpeta del frontend. 
-```bash
-npm install 
-npm run dev
 ```

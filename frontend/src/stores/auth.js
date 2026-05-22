@@ -2,8 +2,17 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import api from '@/services/api'
 
+/** Acepta usuario plano o envuelto en { data } (respuesta antigua de /auth/me). */
+function normalizeUser(raw) {
+  if (!raw) return null
+  if (raw.data && typeof raw.data === 'object' && raw.nombre === undefined) {
+    return raw.data
+  }
+  return raw
+}
+
 export const useAuthStore = defineStore('auth', () => {
-  const user = ref(JSON.parse(localStorage.getItem('user') || 'null'))
+  const user = ref(normalizeUser(JSON.parse(localStorage.getItem('user') || 'null')))
   const token = ref(localStorage.getItem('token') || null)
 
   const isLoggedIn = computed(() => !!token.value)
@@ -11,13 +20,22 @@ export const useAuthStore = defineStore('auth', () => {
   const isClient = computed(() => role.value === 'client')
   const isProfessional = computed(() => role.value === 'professional')
   const isAdmin = computed(() => role.value === 'admin')
+  const displayName = computed(() => {
+    if (!user.value) return ''
+    const n = [user.value.nombre, user.value.apellido].filter(Boolean).join(' ')
+    return n || user.value.email || ''
+  })
 
-  const setSession = (userData, tokenValue) => {
-    user.value = userData
+  const setToken = (tokenValue) => {
     token.value = tokenValue
-    localStorage.setItem('user', JSON.stringify(userData))
     localStorage.setItem('token', tokenValue)
     api.defaults.headers.common['Authorization'] = `Bearer ${tokenValue}`
+  }
+
+  const setSession = (userData, tokenValue) => {
+    user.value = normalizeUser(userData)
+    setToken(tokenValue)
+    localStorage.setItem('user', JSON.stringify(user.value))
   }
 
   const login = async (credentials) => {
@@ -42,9 +60,9 @@ export const useAuthStore = defineStore('auth', () => {
 
   const fetchMe = async () => {
     const { data } = await api.get('/auth/me')
-    user.value = data
-    localStorage.setItem('user', JSON.stringify(data))
-    return data
+    user.value = normalizeUser(data)
+    localStorage.setItem('user', JSON.stringify(user.value))
+    return user.value
   }
 
   // Restaurar header de axios al iniciar
@@ -52,5 +70,19 @@ export const useAuthStore = defineStore('auth', () => {
     api.defaults.headers.common['Authorization'] = `Bearer ${token.value}`
   }
 
-  return { user, token, isLoggedIn, role, isClient, isProfessional, isAdmin, login, register, logout, fetchMe }
+  return {
+    user,
+    token,
+    isLoggedIn,
+    role,
+    isClient,
+    isProfessional,
+    isAdmin,
+    displayName,
+    setToken,
+    login,
+    register,
+    logout,
+    fetchMe,
+  }
 })

@@ -16,7 +16,7 @@ const stats = [
 <template>
   <div>
     <div class="mb-8">
-      <h1 class="text-2xl font-bold text-neutral-900">Bienvenido, {{ auth.user?.name }} 👋</h1>
+      <h1 class="text-2xl font-bold text-neutral-900">Bienvenido, {{ auth.displayName }} 👋</h1>
       <p class="text-neutral-500 mt-1">Aquí podés gestionar tus reservas y sesiones.</p>
     </div>
 

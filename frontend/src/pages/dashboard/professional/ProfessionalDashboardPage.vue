@@ -17,7 +17,7 @@ const stats = [
   <div>
     <div class="mb-8">
       <h1 class="text-2xl font-bold text-neutral-900">Panel profesional 💼</h1>
-      <p class="text-neutral-500 mt-1">Hola {{ auth.user?.name }}, aquí están tus métricas del día.</p>
+      <p class="text-neutral-500 mt-1">Hola {{ auth.displayName }}, aquí están tus métricas del día.</p>
     </div>
 
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
