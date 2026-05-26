@@ -21,7 +21,7 @@ class ProfessionalController extends Controller
         $query = $this->baseQuery();
 
         if ($search = $request->string('search')->trim()->toString()) {
-            $term = '%'.$search.'%';
+            $term = '%' . $search . '%';
             $query->where(function (Builder $q) use ($term) {
                 $q->where('titulo', 'like', $term)
                     ->orWhereHas('user', function (Builder $uq) use ($term) {
@@ -31,17 +31,51 @@ class ProfessionalController extends Controller
             });
         }
 
-        if ($modalidad = $request->string('modalidad')->toString()) {
-            $query->whereHas('services', function (Builder $q) use ($modalidad) {
-                $q->where('activo', true)->where('modalidad', $modalidad);
+        // Filtros sobre servicios del profesional: modalidad, tipo, precio.
+        $modalidad = $request->string('modalidad')->toString();
+        $type = $request->string('type')->toString();
+        $precioMin = $request->input('precio_min');
+        $precioMax = $request->input('precio_max');
+
+        if ($modalidad || $type || $precioMin !== null || $precioMax !== null) {
+            $query->whereHas('services', function (Builder $q) use ($modalidad, $type, $precioMin, $precioMax) {
+                $q->where('activo', true);
+                if ($modalidad) {
+                    $q->where('modalidad', $modalidad);
+                }
+                if ($type) {
+                    $q->where('type', $type);
+                }
+                if ($precioMin !== null) {
+                    $q->where('precio', '>=', (float) $precioMin);
+                }
+                if ($precioMax !== null) {
+                    $q->where('precio', '<=', (float) $precioMax);
+                }
             });
         }
 
+        // Filtros sobre ubicación del profesional.
+        if ($ciudad = $request->string('ciudad')->toString()) {
+            $query->whereHas('location', fn (Builder $q) => $q->where('ciudad', 'like', '%' . $ciudad . '%'));
+        }
+        if ($pais = $request->string('pais')->toString()) {
+            $query->whereHas('location', fn (Builder $q) => $q->where('pais', $pais));
+        }
+
+        // Filtro por calificación mínima (promedio).
+        if ($ratingMin = $request->input('rating_min')) {
+            $query->having('reviews_avg_puntaje', '>=', (float) $ratingMin);
+        }
+
+        // Orden: rating (default) o price (precio del servicio más barato).
         $sort = $request->string('sort', 'rating')->toString();
-        if ($sort === 'rating') {
-            $query->orderByDesc('reviews_avg_puntaje');
+        if ($sort === 'price') {
+            $query
+                ->withMin(['services as precio_min_service' => fn ($q) => $q->where('activo', true)], 'precio')
+                ->orderBy('precio_min_service');
         } else {
-            $query->orderBy('titulo');
+            $query->orderByDesc('reviews_avg_puntaje');
         }
 
         $profiles = $query->paginate(
@@ -49,7 +83,7 @@ class ProfessionalController extends Controller
         );
 
         $profiles->getCollection()->transform(function (ProfessionalProfile $profile) {
-            $profile->modalidades = $this->modalidadesFor($profile);
+            $profile->modalidades = $this->modalidadesPara($profile);
 
             return $profile;
         });
@@ -74,7 +108,7 @@ class ProfessionalController extends Controller
             ])
             ->findOrFail($id);
 
-        $profile->modalidades = $this->modalidadesFor($profile);
+        $profile->modalidades = $this->modalidadesPara($profile);
 
         return response()->json(new ProfessionalDetailResource($profile));
     }
@@ -136,7 +170,7 @@ class ProfessionalController extends Controller
     }
 
     /** @return list<string> */
-    private function modalidadesFor(ProfessionalProfile $profile): array
+    private function modalidadesPara(ProfessionalProfile $profile): array
     {
         if ($profile->relationLoaded('services')) {
             return $profile->services
@@ -154,13 +188,5 @@ class ProfessionalController extends Controller
             ->pluck('modalidad')
             ->map(fn ($m) => $m->value)
             ->all();
-    }
-
-    private function notImplemented(string $endpoint): JsonResponse
-    {
-        return response()->json([
-            'message' => 'Endpoint pendiente de implementación.',
-            'endpoint' => $endpoint,
-        ], 501);
     }
 }

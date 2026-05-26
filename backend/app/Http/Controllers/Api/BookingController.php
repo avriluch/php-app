@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Enums\BookingStatus;
 use App\Enums\Modalidad;
 use App\Enums\PaymentStatus;
+use App\Enums\ServiceType;
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\BookingResource;
@@ -88,7 +89,7 @@ class BookingController extends Controller
         $datos = $request->validate([
             'service_id' => ['required', 'integer', 'exists:services,id'],
             'professional_id' => ['required', 'integer', 'exists:professional_profiles,id'],
-            'fecha_hora' => ['required', 'date'],
+            'fecha_hora' => ['required', 'date', 'after:now'],
             'modalidad' => ['required', Rule::in(array_column(Modalidad::cases(), 'value'))],
             'package_purchase_id' => ['nullable', 'integer', 'exists:package_purchases,id'],
         ]);
@@ -105,7 +106,28 @@ class BookingController extends Controller
             );
             abort_unless($servicio->activo, 422, 'El servicio no está activo.');
 
+            // Coherencia de modalidad: si el servicio es solo presencial o solo virtual,
+            // la reserva no puede pedir una modalidad distinta. Si el servicio es híbrido,
+            // se acepta cualquier modalidad concreta.
+            $modalidadServicio = $servicio->modalidad?->value;
+            $modalidadReserva = $datos['modalidad'];
+            if ($modalidadServicio !== Modalidad::Hibrida->value
+                && $modalidadServicio !== $modalidadReserva
+            ) {
+                throw ValidationException::withMessages([
+                    'modalidad' => "El servicio solo admite la modalidad '{$modalidadServicio}'.",
+                ]);
+            }
+
+            $esPaquete = $servicio->type === ServiceType::Package;
             $compraPaquete = null;
+
+            if ($esPaquete && empty($datos['package_purchase_id'])) {
+                throw ValidationException::withMessages([
+                    'package_purchase_id' => 'Para reservar una sesión de un paquete, debés enviar package_purchase_id.',
+                ]);
+            }
+
             if (! empty($datos['package_purchase_id'])) {
                 $compraPaquete = PackagePurchase::lockForUpdate()
                     ->where('id', $datos['package_purchase_id'])
@@ -141,20 +163,19 @@ class BookingController extends Controller
                 'service_id' => $servicio->id,
                 'package_purchase_id' => $compraPaquete?->id,
                 'fecha_hora' => $fechaHora,
-                'modalidad' => $datos['modalidad'],
+                'modalidad' => $modalidadReserva,
                 'estado' => BookingStatus::Pendiente,
             ]);
 
-            $monto = $compraPaquete ? 0 : (float) $servicio->precio;
-            Payment::create([
-                'booking_id' => $reserva->id,
-                'monto' => $monto,
-                'estado' => $compraPaquete
-                    ? PaymentStatus::Completado->value
-                    : PaymentStatus::Pendiente->value,
-            ]);
-
-            if ($compraPaquete) {
+            // El Payment se crea solo para sesiones sueltas. Si la reserva consume
+            // de un paquete, el cobro vivió en `package_purchases.payment` al comprarlo.
+            if (! $compraPaquete) {
+                Payment::create([
+                    'booking_id' => $reserva->id,
+                    'monto' => (float) $servicio->precio,
+                    'estado' => PaymentStatus::Pendiente->value,
+                ]);
+            } else {
                 $compraPaquete->decrement('sesiones_restantes');
             }
 

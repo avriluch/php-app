@@ -52,7 +52,7 @@ class BookingResource extends JsonResource
                     'id' => $this->payment->id,
                     'estado' => $this->payment->estado->value,
                     'monto' => (float) $this->payment->monto,
-                    'metodo' => $this->payment->metodo,
+                    'metodo' => $this->payment->metodo?->value,
                 ],
             ),
             'created_at' => optional($this->created_at)?->toIso8601String(),

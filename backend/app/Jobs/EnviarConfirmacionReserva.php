@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Enums\NotificationType;
+use App\Events\NuevaReservaProfesional;
 use App\Mail\ReservaCreadaMail;
 use App\Models\Booking;
 use App\Models\Notification;
@@ -66,6 +67,9 @@ class EnviarConfirmacionReserva implements ShouldQueue
             ]);
 
             Mail::to($profUser->email)->send(new ReservaCreadaMail($reserva, 'profesional'));
+
+            // Transmite en vivo al canal privado del profesional (WebSocket vía Reverb).
+            NuevaReservaProfesional::dispatch($reserva);
         }
     }
 }

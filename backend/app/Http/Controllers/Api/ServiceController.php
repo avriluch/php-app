@@ -110,7 +110,7 @@ class ServiceController extends Controller
     {
         $reglaBase = $parcial ? ['sometimes'] : ['required'];
 
-        return $request->validate([
+        $datos = $request->validate([
             'type' => [...$reglaBase, Rule::in(array_column(ServiceType::cases(), 'value'))],
             'nombre' => [...$reglaBase, 'string', 'max:150'],
             'descripcion' => ['nullable', 'string', 'max:2000'],
@@ -121,5 +121,46 @@ class ServiceController extends Controller
             'cantidad_sesiones' => ['nullable', 'integer', 'between:1,200'],
             'activo' => ['sometimes', 'boolean'],
         ]);
+
+        $this->validarCoherencia($datos, $parcial);
+
+        return $datos;
+    }
+
+    /**
+     * Reglas cruzadas entre campos (no se pueden expresar con $request->validate solo).
+     * @param  array<string, mixed>  $datos
+     */
+    private function validarCoherencia(array $datos, bool $parcial): bool
+    {
+        $type = $datos['type'] ?? null;
+        $modalidad = $datos['modalidad'] ?? null;
+
+        if (! $parcial || isset($datos['type'])) {
+            if ($type === ServiceType::Session->value && empty($datos['duracion'])) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'duracion' => 'La duración es obligatoria para servicios tipo sesión.',
+                ]);
+            }
+            if ($type === ServiceType::Package->value && empty($datos['cantidad_sesiones'])) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'cantidad_sesiones' => 'La cantidad de sesiones es obligatoria para servicios tipo paquete.',
+                ]);
+            }
+        }
+
+        if (! $parcial || isset($datos['modalidad'])) {
+            $necesitaUbicacion = in_array($modalidad, [
+                Modalidad::Presencial->value,
+                Modalidad::Hibrida->value,
+            ], true);
+            if ($necesitaUbicacion && empty($datos['location_id'])) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'location_id' => 'Se requiere una ubicación para servicios presenciales o híbridos.',
+                ]);
+            }
+        }
+
+        return true;
     }
 }

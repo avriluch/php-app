@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\PackagePurchaseController;
 use App\Http\Controllers\Api\ProfessionalController;
 use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\ServiceController;
+use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', fn () => response()->json(['status' => 'ok']));
@@ -38,6 +39,10 @@ Route::get('/professionals/{id}/reviews', [ReviewController::class, 'porProfesio
 
 // ── Autenticados ──────────────────────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
+    // Autenticación de canales privados (Reverb / Laravel Echo).
+    // El frontend hace POST aquí con el Bearer token cuando se suscribe a un canal.
+    Route::post('/broadcasting/auth', fn () => Broadcast::auth(request()));
+
     // Sesión actual
     Route::get('/me/stats', [MeController::class, 'stats']);
 

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -23,6 +24,7 @@ class Payment extends Model
         return [
             'monto' => 'decimal:2',
             'estado' => PaymentStatus::class,
+            'metodo' => PaymentMethod::class,
             'fecha_pago' => 'datetime',
         ];
     }
