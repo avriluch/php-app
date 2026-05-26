@@ -2,54 +2,321 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\BookingStatus;
+use App\Enums\Modalidad;
+use App\Enums\PaymentStatus;
+use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
+use App\Http\Resources\BookingResource;
+use App\Jobs\EnviarCancelacionReserva;
+use App\Jobs\EnviarConfirmacionReserva;
+use App\Models\Booking;
+use App\Models\PackagePurchase;
+use App\Models\Payment;
+use App\Models\Service;
+use App\Services\AvailabilityService;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
-/**
- * TODO: implementar con DB::transaction y unique(professional_profile_id, fecha_hora)
- *
- * - index, show, store
- * - cancel, reschedule, updateStatus
- */
 class BookingController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    public function __construct(private readonly AvailabilityService $disponibilidad)
     {
-        return $this->notImplemented('GET /bookings');
     }
 
-    public function show(int $id): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        return $this->notImplemented("GET /bookings/{$id}");
+        $usuario = $request->user();
+
+        $query = Booking::query()
+            ->with(['service', 'professionalProfile.user', 'client', 'payment'])
+            ->orderByDesc('fecha_hora');
+
+        if ($usuario->role === UserRole::Client) {
+            $query->where('client_user_id', $usuario->id);
+        } elseif ($usuario->role === UserRole::Professional) {
+            $perfil = $usuario->professionalProfile;
+            abort_unless($perfil, 403, 'Perfil profesional no encontrado.');
+            $query->where('professional_profile_id', $perfil->id);
+        }
+        // Admin ve todo
+
+        if ($estado = $request->string('estado')->toString()) {
+            $query->where('estado', $estado);
+        }
+        if ($desde = $request->string('from')->toString()) {
+            $query->where('fecha_hora', '>=', Carbon::parse($desde));
+        }
+        if ($hasta = $request->string('to')->toString()) {
+            $query->where('fecha_hora', '<=', Carbon::parse($hasta));
+        }
+
+        $reservas = $query->paginate(
+            perPage: min((int) $request->input('per_page', 20), 100)
+        );
+
+        return response()->json([
+            'data' => BookingResource::collection($reservas)->resolve(),
+            'meta' => [
+                'current_page' => $reservas->currentPage(),
+                'last_page' => $reservas->lastPage(),
+                'per_page' => $reservas->perPage(),
+                'total' => $reservas->total(),
+            ],
+        ]);
+    }
+
+    public function show(Request $request, int $id): JsonResponse
+    {
+        $reserva = Booking::with(['service', 'professionalProfile.user', 'client', 'payment', 'review'])
+            ->findOrFail($id);
+
+        $this->autorizarVer($request, $reserva);
+
+        return response()->json(new BookingResource($reserva));
     }
 
     public function store(Request $request): JsonResponse
     {
-        return $this->notImplemented('POST /bookings');
+        $usuario = $request->user();
+        abort_unless($usuario->role === UserRole::Client, 403, 'Solo clientes pueden reservar.');
+
+        $datos = $request->validate([
+            'service_id' => ['required', 'integer', 'exists:services,id'],
+            'professional_id' => ['required', 'integer', 'exists:professional_profiles,id'],
+            'fecha_hora' => ['required', 'date'],
+            'modalidad' => ['required', Rule::in(array_column(Modalidad::cases(), 'value'))],
+            'package_purchase_id' => ['nullable', 'integer', 'exists:package_purchases,id'],
+        ]);
+
+        $fechaHora = Carbon::parse($datos['fecha_hora']);
+
+        return DB::transaction(function () use ($datos, $fechaHora, $usuario) {
+            $servicio = Service::lockForUpdate()->findOrFail($datos['service_id']);
+
+            abort_unless(
+                (int) $servicio->professional_profile_id === (int) $datos['professional_id'],
+                422,
+                'El servicio no pertenece al profesional indicado.',
+            );
+            abort_unless($servicio->activo, 422, 'El servicio no está activo.');
+
+            $compraPaquete = null;
+            if (! empty($datos['package_purchase_id'])) {
+                $compraPaquete = PackagePurchase::lockForUpdate()
+                    ->where('id', $datos['package_purchase_id'])
+                    ->where('client_user_id', $usuario->id)
+                    ->where('service_id', $servicio->id)
+                    ->first();
+
+                if (! $compraPaquete) {
+                    throw ValidationException::withMessages([
+                        'package_purchase_id' => 'Paquete no encontrado para este cliente y servicio.',
+                    ]);
+                }
+                if ($compraPaquete->sesiones_restantes <= 0) {
+                    throw ValidationException::withMessages([
+                        'package_purchase_id' => 'El paquete no tiene sesiones restantes.',
+                    ]);
+                }
+            }
+
+            if (! $this->disponibilidad->isSlotFree(
+                (int) $datos['professional_id'],
+                $fechaHora,
+                (int) $servicio->duracion,
+            )) {
+                throw ValidationException::withMessages([
+                    'fecha_hora' => 'El horario ya no está disponible.',
+                ]);
+            }
+
+            $reserva = Booking::create([
+                'client_user_id' => $usuario->id,
+                'professional_profile_id' => $datos['professional_id'],
+                'service_id' => $servicio->id,
+                'package_purchase_id' => $compraPaquete?->id,
+                'fecha_hora' => $fechaHora,
+                'modalidad' => $datos['modalidad'],
+                'estado' => BookingStatus::Pendiente,
+            ]);
+
+            $monto = $compraPaquete ? 0 : (float) $servicio->precio;
+            Payment::create([
+                'booking_id' => $reserva->id,
+                'monto' => $monto,
+                'estado' => $compraPaquete
+                    ? PaymentStatus::Completado->value
+                    : PaymentStatus::Pendiente->value,
+            ]);
+
+            if ($compraPaquete) {
+                $compraPaquete->decrement('sesiones_restantes');
+            }
+
+            $reserva->load(['service', 'professionalProfile.user', 'payment']);
+
+            // Notificación + email asincrónicos (se ejecutan tras commit por la cola Redis).
+            EnviarConfirmacionReserva::dispatch($reserva->id);
+
+            return response()->json(new BookingResource($reserva), 201);
+        });
     }
 
     public function cancel(Request $request, int $id): JsonResponse
     {
-        return $this->notImplemented("PATCH /bookings/{$id}/cancel");
+        $reserva = Booking::with(['service', 'professionalProfile', 'payment', 'packagePurchase'])
+            ->findOrFail($id);
+
+        $this->autorizarVer($request, $reserva);
+
+        if (! $reserva->estado->canTransitionTo(BookingStatus::Cancelada)) {
+            throw ValidationException::withMessages([
+                'estado' => "No se puede cancelar una reserva en estado '{$reserva->estado->value}'.",
+            ]);
+        }
+
+        $usuario = $request->user();
+        $esCliente = $usuario->role === UserRole::Client
+            && (int) $reserva->client_user_id === (int) $usuario->id;
+        if ($esCliente) {
+            $minHoras = (int) ($reserva->professionalProfile?->cancelacion_horas_minimas ?? 0);
+            if ($minHoras > 0 && Carbon::now()->addHours($minHoras)->gt($reserva->fecha_hora)) {
+                throw ValidationException::withMessages([
+                    'fecha_hora' => "Debe cancelar con al menos {$minHoras}h de anticipación.",
+                ]);
+            }
+        }
+
+        $motivo = $request->input('motivo');
+
+        DB::transaction(function () use ($reserva, $motivo) {
+            $reserva->update([
+                'estado' => BookingStatus::Cancelada,
+                'cancelled_at' => Carbon::now(),
+                'cancel_motivo' => $motivo,
+            ]);
+
+            if ($reserva->packagePurchase) {
+                $reserva->packagePurchase->increment('sesiones_restantes');
+            }
+        });
+
+        $reserva->refresh()->load(['service', 'professionalProfile.user', 'payment']);
+
+        EnviarCancelacionReserva::dispatch($reserva->id);
+
+        return response()->json(new BookingResource($reserva));
     }
 
     public function reschedule(Request $request, int $id): JsonResponse
     {
-        return $this->notImplemented("PATCH /bookings/{$id}/reschedule");
+        $reserva = Booking::with('service')->findOrFail($id);
+        $this->autorizarVer($request, $reserva);
+
+        $usuario = $request->user();
+        abort_unless(
+            $usuario->role === UserRole::Client
+                && (int) $reserva->client_user_id === (int) $usuario->id,
+            403,
+            'Solo el cliente puede reprogramar su reserva.',
+        );
+
+        $estadosPermitidos = [BookingStatus::Pendiente, BookingStatus::Confirmada];
+        if (! in_array($reserva->estado, $estadosPermitidos, true)) {
+            throw ValidationException::withMessages([
+                'estado' => 'Solo se reprograman reservas pendientes o confirmadas.',
+            ]);
+        }
+
+        $datos = $request->validate([
+            'fecha_hora' => ['required', 'date'],
+        ]);
+
+        $nuevaFecha = Carbon::parse($datos['fecha_hora']);
+
+        DB::transaction(function () use ($reserva, $nuevaFecha) {
+            if (! $this->disponibilidad->isSlotFree(
+                (int) $reserva->professional_profile_id,
+                $nuevaFecha,
+                (int) $reserva->service->duracion,
+                $reserva->id,
+            )) {
+                throw ValidationException::withMessages([
+                    'fecha_hora' => 'El nuevo horario no está disponible.',
+                ]);
+            }
+
+            $reserva->update(['fecha_hora' => $nuevaFecha]);
+        });
+
+        $reserva->refresh()->load(['service', 'professionalProfile.user', 'payment']);
+
+        return response()->json(new BookingResource($reserva));
     }
 
     public function updateStatus(Request $request, int $id): JsonResponse
     {
-        return $this->notImplemented("PATCH /bookings/{$id}/status");
+        $reserva = Booking::with(['service', 'professionalProfile'])->findOrFail($id);
+
+        $usuario = $request->user();
+        $esProfesionalDueno = $usuario->role === UserRole::Professional
+            && (int) $reserva->professional_profile_id === (int) ($usuario->professionalProfile?->id ?? 0);
+        $esAdmin = $usuario->role === UserRole::Admin;
+        abort_unless($esProfesionalDueno || $esAdmin, 403);
+
+        $datos = $request->validate([
+            'estado' => ['required', Rule::in(array_column(BookingStatus::cases(), 'value'))],
+        ]);
+
+        $siguiente = BookingStatus::from($datos['estado']);
+
+        if (! $reserva->estado->canTransitionTo($siguiente)) {
+            throw ValidationException::withMessages([
+                'estado' => "Transición no permitida: {$reserva->estado->value} → {$siguiente->value}.",
+            ]);
+        }
+
+        $cambios = ['estado' => $siguiente];
+
+        if ($siguiente === BookingStatus::EnCurso && $reserva->modalidad === Modalidad::Virtual) {
+            // Placeholder: el endpoint /bookings/{id}/livekit-token completará esto.
+            $cambios['url_video_llamada'] = sprintf(
+                'livekit://room-%d-%s',
+                $reserva->id,
+                bin2hex(random_bytes(4)),
+            );
+        }
+
+        $reserva->update($cambios);
+        $reserva->refresh()->load(['service', 'professionalProfile.user', 'payment']);
+
+        return response()->json(new BookingResource($reserva));
     }
 
-    private function notImplemented(string $endpoint): JsonResponse
+    private function autorizarVer(Request $request, Booking $reserva): void
     {
-        return response()->json([
-            'message' => 'Endpoint pendiente de implementación.',
-            'endpoint' => $endpoint,
-            'hint' => 'Usar BookingStatus::canTransitionTo() y bloqueo en transacción.',
-        ], 501);
+        $usuario = $request->user();
+
+        if ($usuario->role === UserRole::Admin) {
+            return;
+        }
+        if ($usuario->role === UserRole::Client
+            && (int) $reserva->client_user_id === (int) $usuario->id
+        ) {
+            return;
+        }
+        if (
+            $usuario->role === UserRole::Professional
+            && (int) $reserva->professional_profile_id === (int) ($usuario->professionalProfile?->id ?? 0)
+        ) {
+            return;
+        }
+
+        abort(403);
     }
 }

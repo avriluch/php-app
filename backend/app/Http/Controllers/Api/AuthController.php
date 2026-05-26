@@ -73,6 +73,40 @@ class AuthController extends Controller
         return response()->json(new UserResource($request->user()));
     }
 
+    public function updateMe(Request $request): JsonResponse
+    {
+        $usuario = $request->user();
+
+        $datos = $request->validate([
+            'nombre' => ['sometimes', 'string', 'max:100'],
+            'apellido' => ['sometimes', 'string', 'max:100'],
+            'telefono' => ['sometimes', 'nullable', 'string', 'max:30'],
+            'foto_perfil' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'email' => ['sometimes', 'email', 'max:150', 'unique:users,email,' . $usuario->id],
+            'password' => ['sometimes', 'string', 'min:6', 'confirmed'],
+            'password_actual' => ['required_with:password', 'string'],
+        ]);
+
+        if (isset($datos['password'])) {
+            if (! Hash::check($datos['password_actual'], $usuario->password)) {
+                throw ValidationException::withMessages([
+                    'password_actual' => ['Contraseña actual incorrecta.'],
+                ]);
+            }
+            $usuario->password = $datos['password'];
+        }
+
+        foreach (['nombre', 'apellido', 'telefono', 'foto_perfil', 'email'] as $campo) {
+            if (array_key_exists($campo, $datos)) {
+                $usuario->{$campo} = $datos[$campo];
+            }
+        }
+
+        $usuario->save();
+
+        return response()->json(new UserResource($usuario));
+    }
+
     public function logout(Request $request): JsonResponse
     {
         $request->user()->currentAccessToken()?->delete();

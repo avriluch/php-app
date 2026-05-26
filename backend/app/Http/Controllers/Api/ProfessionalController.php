@@ -5,7 +5,11 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ProfessionalDetailResource;
 use App\Http\Resources\ProfessionalListResource;
+use App\Http\Resources\ServiceResource;
 use App\Models\ProfessionalProfile;
+use App\Models\Service;
+use App\Services\AvailabilityService;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -77,12 +81,48 @@ class ProfessionalController extends Controller
 
     public function services(int $id): JsonResponse
     {
-        return $this->notImplemented("GET /professionals/{$id}/services");
+        $perfil = ProfessionalProfile::findOrFail($id);
+
+        $servicios = $perfil->services()
+            ->where('activo', true)
+            ->with('location')
+            ->orderBy('precio')
+            ->get();
+
+        return response()->json([
+            'data' => ServiceResource::collection($servicios)->resolve(),
+        ]);
     }
 
-    public function availability(Request $request, int $id): JsonResponse
+    public function availability(Request $request, int $id, AvailabilityService $disponibilidad): JsonResponse
     {
-        return $this->notImplemented("GET /professionals/{$id}/availability");
+        $datos = $request->validate([
+            'service_id' => ['required', 'integer', 'exists:services,id'],
+            'from' => ['required', 'date'],
+            'to' => ['required', 'date', 'after_or_equal:from'],
+        ]);
+
+        $perfil = ProfessionalProfile::with('agenda')->findOrFail($id);
+
+        if (! $perfil->agenda) {
+            return response()->json(['slots' => []]);
+        }
+
+        $servicio = Service::findOrFail($datos['service_id']);
+        abort_unless(
+            (int) $servicio->professional_profile_id === (int) $perfil->id,
+            422,
+            'El servicio no pertenece al profesional.',
+        );
+
+        $desde = Carbon::parse($datos['from']);
+        $hasta = Carbon::parse($datos['to']);
+
+        $slots = $disponibilidad->slotsFor($perfil->agenda, $servicio, $desde, $hasta);
+
+        return response()->json([
+            'slots' => $slots->values()->all(),
+        ]);
     }
 
     private function baseQuery(): Builder
