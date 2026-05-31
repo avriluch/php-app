@@ -37,6 +37,12 @@ const router = createRouter({
           component: () => import('@/pages/bookings/BookingPage.vue'),
           meta: { requiresAuth: true },
         },
+        {
+          path: 'pay/:bookingId/:paymentId',
+          name: 'payment',
+          component: () => import('@/pages/payments/PaymentPage.vue'),
+          meta: { requiresAuth: true },
+        },
       ],
     },
 

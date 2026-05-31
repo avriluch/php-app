@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\GoogleAuthController;
 use App\Http\Controllers\Api\MeController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PackagePurchaseController;
+use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\ProfessionalController;
 use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\ServiceController;
@@ -55,6 +56,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/bookings/{id}/status', [BookingController::class, 'updateStatus'])
         ->middleware('role:professional,admin')
         ->whereNumber('id');
+
+    // Pagos PayPal
+    Route::middleware('role:client')->group(function () {
+        Route::post('/payments/{id}/paypal/create-order', [PaymentController::class, 'createPayPalOrder'])->whereNumber('id');
+        Route::post('/payments/{id}/paypal/capture', [PaymentController::class, 'capturePayPalOrder'])->whereNumber('id');
+    });
 
     // Reseñas
     Route::post('/bookings/{id}/review', [ReviewController::class, 'store'])->whereNumber('id');
