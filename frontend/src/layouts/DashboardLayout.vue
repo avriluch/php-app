@@ -1,7 +1,8 @@
 <script setup>
-import { Menu, Bell } from '@lucide/vue'
+import { Menu } from '@lucide/vue'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import AppAvatar from '@/components/ui/AppAvatar.vue'
+import NotificationsBell from '@/components/layout/NotificationsBell.vue'
 import { useUIStore } from '@/stores/ui'
 import { useAuthStore } from '@/stores/auth'
 import { RouterLink } from 'vue-router'
@@ -25,11 +26,7 @@ const auth = useAuthStore()
         </button>
 
         <div class="flex items-center gap-3">
-          <!-- Notificaciones -->
-          <button class="relative p-2 rounded-lg hover:bg-neutral-100 text-neutral-600 cursor-pointer">
-            <Bell class="w-5 h-5" />
-            <span class="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
-          </button>
+          <NotificationsBell />
 
           <!-- Avatar / nombre -->
           <RouterLink to="/profile" class="flex items-center gap-2 no-underline">

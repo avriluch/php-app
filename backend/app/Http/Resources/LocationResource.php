@@ -10,6 +10,7 @@ class LocationResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
+            'id' => $this->id,
             'ciudad' => $this->ciudad,
             'pais' => $this->pais,
             'latitud' => (float) $this->latitud,

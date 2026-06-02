@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="ServiConnect">
+  <rect width="512" height="512" rx="96" fill="#4f46e5"/>
+  <!-- "S" estilizada como path para no depender de fuentes del sistema -->
+  <path
+    fill="#ffffff"
+    d="M192 152
+       C 232 142, 312 138, 348 170
+       C 372 192, 372 224, 348 246
+       C 324 268, 260 268, 230 282
+       C 200 296, 188 318, 200 342
+       C 216 374, 280 384, 336 366
+       C 348 362, 360 358, 370 352
+       L 370 388
+       C 340 398, 280 408, 232 396
+       C 184 384, 152 358, 148 318
+       C 144 280, 168 254, 208 240
+       C 248 226, 304 222, 320 208
+       C 336 194, 332 178, 312 168
+       C 280 152, 232 156, 200 168
+       Z"
+  />
+</svg>

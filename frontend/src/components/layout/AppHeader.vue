@@ -4,6 +4,7 @@ import { RouterLink, useRouter } from 'vue-router'
 import { Menu, X, ChevronDown, LogOut, LayoutDashboard, User } from '@lucide/vue'
 import AppButton from '@/components/ui/AppButton.vue'
 import AppAvatar from '@/components/ui/AppAvatar.vue'
+import NotificationsBell from '@/components/layout/NotificationsBell.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -67,6 +68,8 @@ const handleLogout = () => {
           </template>
 
           <template v-else>
+            <NotificationsBell />
+
             <div class="relative">
               <button
                 class="flex items-center gap-2 text-sm font-medium text-neutral-700 hover:text-neutral-900 transition-colors cursor-pointer"
@@ -108,14 +111,17 @@ const handleLogout = () => {
           </template>
         </div>
 
-        <!-- Mobile toggle -->
-        <button
-          class="md:hidden p-2 rounded-lg text-neutral-600 hover:bg-neutral-100 cursor-pointer"
-          @click="mobileOpen = !mobileOpen"
-        >
-          <Menu v-if="!mobileOpen" class="w-5 h-5" />
-          <X v-else class="w-5 h-5" />
-        </button>
+        <!-- Mobile right cluster: bell + toggle -->
+        <div class="flex items-center gap-1 md:hidden">
+          <NotificationsBell v-if="auth.isLoggedIn" />
+          <button
+            class="p-2 rounded-lg text-neutral-600 hover:bg-neutral-100 cursor-pointer"
+            @click="mobileOpen = !mobileOpen"
+          >
+            <Menu v-if="!mobileOpen" class="w-5 h-5" />
+            <X v-else class="w-5 h-5" />
+          </button>
+        </div>
       </div>
     </div>
 

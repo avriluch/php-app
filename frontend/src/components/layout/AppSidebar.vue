@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import {
   LayoutDashboard, Calendar, Users, Settings, Star, CreditCard,
-  Briefcase, BarChart2, ShieldCheck, X,
+  Briefcase, BarChart2, ShieldCheck, Bell, X,
 } from '@lucide/vue'
 import AppAvatar from '@/components/ui/AppAvatar.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -20,6 +20,7 @@ const navByRole = {
     { label: 'Mis paquetes', to: '/dashboard/client/packages', icon: Briefcase },
     { label: 'Mis reseñas', to: '/dashboard/client/reviews', icon: Star },
     { label: 'Pagos', to: '/dashboard/client/payments', icon: CreditCard },
+    { label: 'Notificaciones', to: '/dashboard/notifications', icon: Bell },
     { label: 'Configuración', to: '/dashboard/client/settings', icon: Settings },
   ],
   professional: [
@@ -30,6 +31,7 @@ const navByRole = {
     { label: 'Paquetes', to: '/dashboard/professional/packages', icon: Briefcase },
     { label: 'Reseñas', to: '/dashboard/professional/reviews', icon: Star },
     { label: 'Métricas', to: '/dashboard/professional/metrics', icon: BarChart2 },
+    { label: 'Notificaciones', to: '/dashboard/notifications', icon: Bell },
     { label: 'Configuración', to: '/dashboard/professional/settings', icon: Settings },
   ],
   admin: [
@@ -37,6 +39,7 @@ const navByRole = {
     { label: 'Usuarios', to: '/admin/users', icon: Users },
     { label: 'Profesionales', to: '/admin/professionals', icon: ShieldCheck },
     { label: 'Métricas', to: '/admin/metrics', icon: BarChart2 },
+    { label: 'Notificaciones', to: '/dashboard/notifications', icon: Bell },
     { label: 'Configuración', to: '/admin/settings', icon: Settings },
   ],
 }

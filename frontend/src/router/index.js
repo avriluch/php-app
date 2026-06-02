@@ -131,7 +131,8 @@ const router = createRouter({
         {
           path: 'schedule',
           name: 'professional-schedule',
-          component: placeholder,
+          component: () =>
+            import('@/pages/dashboard/professional/ProfessionalSchedulePage.vue'),
           meta: {
             pageTitle: 'Agenda',
             pageDescription: 'Horarios, buffers y excepciones (feriados).',
@@ -146,7 +147,8 @@ const router = createRouter({
         {
           path: 'services',
           name: 'professional-services',
-          component: placeholder,
+          component: () =>
+            import('@/pages/dashboard/professional/ProfessionalServicesPage.vue'),
           meta: { pageTitle: 'Servicios', pageDescription: 'Sesiones y precios que ofrecés.' },
         },
         {
@@ -186,6 +188,20 @@ const router = createRouter({
           path: '',
           name: 'profile',
           component: () => import('@/pages/profile/ProfilePage.vue'),
+        },
+      ],
+    },
+
+    // ── Notificaciones (cualquier rol autenticado) ────────
+    {
+      path: '/dashboard/notifications',
+      component: DashboardLayout,
+      meta: { requiresAuth: true },
+      children: [
+        {
+          path: '',
+          name: 'notifications',
+          component: () => import('@/pages/dashboard/NotificationsPage.vue'),
         },
       ],
     },

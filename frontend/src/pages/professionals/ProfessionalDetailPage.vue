@@ -8,6 +8,7 @@ import AppBadge from '@/components/ui/AppBadge.vue'
 import AppAvatar from '@/components/ui/AppAvatar.vue'
 import AppCard from '@/components/ui/AppCard.vue'
 import AppSpinner from '@/components/ui/AppSpinner.vue'
+import LocationMap from '@/components/ui/LocationMap.vue'
 
 const route = useRoute()
 const loading = ref(true)
@@ -101,6 +102,20 @@ onMounted(loadProfessional)
           {{ professional.agenda_resumen.horario_inicio }} – {{ professional.agenda_resumen.horario_fin }}
           · buffer {{ professional.agenda_resumen.buffer_minutos }} min
         </p>
+      </AppCard>
+
+      <AppCard v-if="professional.ubicacion" class="mb-8" padding="md">
+        <h2 class="font-semibold text-neutral-900 mb-3 flex items-center gap-2">
+          <MapPin class="w-5 h-5 text-neutral-500" /> Ubicación
+        </h2>
+        <p class="text-sm text-neutral-600 mb-3">
+          {{ professional.ubicacion.ciudad }}, {{ professional.ubicacion.pais }}
+        </p>
+        <LocationMap
+          :latitud="professional.ubicacion.latitud"
+          :longitud="professional.ubicacion.longitud"
+          :titulo="fullName"
+        />
       </AppCard>
 
       <h2 class="text-xl font-semibold text-neutral-900 mb-4">Servicios</h2>

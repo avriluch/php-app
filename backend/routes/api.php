@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\AgendaController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BookingController;
 use App\Http\Controllers\Api\GoogleAuthController;
+use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\MeController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PackagePurchaseController;
@@ -89,6 +90,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/services', [ServiceController::class, 'store']);
         Route::patch('/services/{id}', [ServiceController::class, 'update'])->whereNumber('id');
         Route::delete('/services/{id}', [ServiceController::class, 'destroy'])->whereNumber('id');
+
+        Route::get('/locations', [LocationController::class, 'index']);
+        Route::post('/locations', [LocationController::class, 'store']);
     });
 
     // Admin

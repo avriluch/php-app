@@ -6,6 +6,17 @@ const api = axios.create({
   timeout: 15000,
 })
 
+// Request: inyecta el Bearer leyendo localStorage en cada llamada.
+// Mantenerlo acá (y no solo en el auth store) asegura que cualquier
+// código que use `api` siga autenticado aunque no haya pasado por login.
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token')
+  if (token && !config.headers.Authorization) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
+
 // Respuesta: manejo global de errores
 api.interceptors.response.use(
   (response) => response,

@@ -18,6 +18,8 @@ class ServiceResource extends JsonResource
             'precio' => (float) $this->precio,
             'modalidad' => $this->modalidad->value,
             'cantidad_sesiones' => $this->cantidad_sesiones,
+            'activo' => (bool) $this->activo,
+            'location_id' => $this->location_id,
             'ubicacion' => $this->when(
                 $this->relationLoaded('location') && $this->location,
                 fn () => new LocationResource($this->location)

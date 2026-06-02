@@ -1,6 +1,7 @@
-import { defineStore } from 'pinia'
+import { defineStore, getActivePinia } from 'pinia'
 import { ref, computed } from 'vue'
 import api from '@/services/api'
+import { useNotificationsStore } from '@/stores/notifications'
 
 /** Acepta usuario plano o envuelto en { data } (respuesta antigua de /auth/me). */
 function normalizeUser(raw) {
@@ -51,6 +52,11 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   const logout = () => {
+    // Limpia el store de notificaciones y cierra el canal de Echo antes
+    // de soltar el token, así la desuscripción aún tiene un user.id válido.
+    if (getActivePinia()) {
+      useNotificationsStore().destroy()
+    }
     user.value = null
     token.value = null
     localStorage.removeItem('user')
