@@ -17,6 +17,10 @@ class UserResource extends JsonResource
             'telefono' => $this->telefono,
             'foto_perfil' => $this->foto_perfil,
             'role' => $this->role->value,
+            'professional_profile_id' => $this->when(
+                $this->relationLoaded('professionalProfile'),
+                fn () => $this->professionalProfile?->id,
+            ),
         ];
     }
 }

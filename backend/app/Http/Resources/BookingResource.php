@@ -55,6 +55,15 @@ class BookingResource extends JsonResource
                     'metodo' => $this->payment->metodo?->value,
                 ],
             ),
+            'review' => $this->when(
+                $this->relationLoaded('review'),
+                fn () => $this->review ? [
+                    'id' => $this->review->id,
+                    'puntaje' => (float) $this->review->puntaje,
+                    'comentario' => $this->review->comentario,
+                    'fecha' => optional($this->review->fecha)?->toIso8601String(),
+                ] : null,
+            ),
             'created_at' => optional($this->created_at)?->toIso8601String(),
         ];
     }

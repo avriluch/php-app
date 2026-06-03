@@ -43,6 +43,12 @@ const router = createRouter({
           component: () => import('@/pages/payments/PaymentPage.vue'),
           meta: { requiresAuth: true },
         },
+        {
+          path: 'call/:bookingId',
+          name: 'video-call',
+          component: () => import('@/pages/call/VideoCallPage.vue'),
+          meta: { requiresAuth: true },
+        },
       ],
     },
 
@@ -99,7 +105,7 @@ const router = createRouter({
         {
           path: 'reviews',
           name: 'client-reviews',
-          component: placeholder,
+          component: () => import('@/pages/dashboard/client/ClientReviewsPage.vue'),
           meta: { pageTitle: 'Mis reseñas', pageDescription: 'Calificaciones que escribiste.' },
         },
         {
@@ -139,6 +145,12 @@ const router = createRouter({
           },
         },
         {
+          path: 'bookings',
+          name: 'professional-bookings',
+          component: () => import('@/pages/dashboard/professional/ProfessionalBookingsPage.vue'),
+          meta: { pageTitle: 'Reservas', pageDescription: 'Turnos de tus clientes.' },
+        },
+        {
           path: 'clients',
           name: 'professional-clients',
           component: placeholder,
@@ -160,7 +172,7 @@ const router = createRouter({
         {
           path: 'reviews',
           name: 'professional-reviews',
-          component: placeholder,
+          component: () => import('@/pages/dashboard/professional/ProfessionalReviewsPage.vue'),
           meta: { pageTitle: 'Reseñas', pageDescription: 'Calificaciones de tus clientes.' },
         },
         {

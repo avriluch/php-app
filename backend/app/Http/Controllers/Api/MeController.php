@@ -95,15 +95,13 @@ class MeController extends Controller
             ])
             ->count();
 
-        $clientesActivos = Booking::where('professional_profile_id', $perfil->id)
-            ->whereIn('estado', [
-                BookingStatus::Confirmada->value,
-                BookingStatus::Pagada->value,
-                BookingStatus::EnCurso->value,
-                BookingStatus::Finalizada->value,
+        $reservasMes = Booking::where('professional_profile_id', $perfil->id)
+            ->whereBetween('fecha_hora', [$inicioMes, $finMes])
+            ->whereNotIn('estado', [
+                BookingStatus::Cancelada->value,
+                BookingStatus::NoAsistida->value,
             ])
-            ->distinct('client_user_id')
-            ->count('client_user_id');
+            ->count();
 
         $ingresosMes = Payment::query()
             ->whereHas('booking', function ($q) use ($perfil, $inicioMes, $finMes) {
@@ -119,7 +117,7 @@ class MeController extends Controller
 
         return [
             'turnos_hoy' => $turnosHoy,
-            'clientes_activos' => $clientesActivos,
+            'reservas_mes' => $reservasMes,
             'ingresos_mes' => (float) $ingresosMes,
             'calificacion' => $calificacion !== null ? round((float) $calificacion, 2) : null,
             'calificacion_total' => $calificacionTotal,

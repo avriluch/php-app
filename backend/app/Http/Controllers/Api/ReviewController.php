@@ -82,6 +82,41 @@ class ReviewController extends Controller
         ]);
     }
 
+    /**
+     * Reseñas recibidas por el profesional autenticado.
+     */
+    public function misProfesionales(Request $request): JsonResponse
+    {
+        $perfil = $request->user()->professionalProfile;
+        abort_unless($perfil, 403, 'Perfil profesional no encontrado.');
+
+        $reviews = Review::with('client:id,nombre,apellido,foto_perfil')
+            ->where('professional_profile_id', $perfil->id)
+            ->orderByDesc('fecha')
+            ->paginate(
+                perPage: min((int) $request->input('per_page', 10), 50)
+            );
+
+        return response()->json([
+            'data' => $reviews->getCollection()->map(fn (Review $r) => [
+                'id' => $r->id,
+                'puntaje' => (float) $r->puntaje,
+                'comentario' => $r->comentario,
+                'fecha' => $r->fecha->toIso8601String(),
+                'cliente' => $r->client ? [
+                    'nombre' => $r->client->nombre,
+                    'apellido' => $r->client->apellido,
+                    'foto_perfil' => $r->client->foto_perfil,
+                ] : null,
+            ])->all(),
+            'meta' => [
+                'current_page' => $reviews->currentPage(),
+                'last_page' => $reviews->lastPage(),
+                'total' => $reviews->total(),
+            ],
+        ]);
+    }
+
     public function store(Request $request, int $bookingId): JsonResponse
     {
         $usuario = $request->user();

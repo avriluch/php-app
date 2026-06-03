@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AdminController;
+use App\Http\Controllers\Api\VideoCallController;
 use App\Http\Controllers\Api\AgendaController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BookingController;
@@ -50,6 +51,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Reservas
     Route::get('/bookings', [BookingController::class, 'index']);
+    Route::get('/bookings/{id}/livekit-token', [VideoCallController::class, 'token'])->whereNumber('id');
     Route::post('/bookings', [BookingController::class, 'store']);
     Route::get('/bookings/{id}', [BookingController::class, 'show'])->whereNumber('id');
     Route::patch('/bookings/{id}/cancel', [BookingController::class, 'cancel'])->whereNumber('id');
@@ -86,6 +88,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/agenda/exceptions', [AgendaController::class, 'storeException']);
         Route::delete('/agenda/exceptions/{id}', [AgendaController::class, 'destroyException'])->whereNumber('id');
 
+        Route::get('/reviews', [ReviewController::class, 'misProfesionales']);
         Route::get('/services', [ServiceController::class, 'index']);
         Route::post('/services', [ServiceController::class, 'store']);
         Route::patch('/services/{id}', [ServiceController::class, 'update'])->whereNumber('id');

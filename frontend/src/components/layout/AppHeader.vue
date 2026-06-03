@@ -75,7 +75,7 @@ const handleLogout = () => {
                 class="flex items-center gap-2 text-sm font-medium text-neutral-700 hover:text-neutral-900 transition-colors cursor-pointer"
                 @click="userMenuOpen = !userMenuOpen"
               >
-                <AppAvatar :name="auth.displayName" size="sm" />
+                <AppAvatar :src="auth.user?.foto_perfil" :name="auth.displayName" size="sm" />
                 <span class="hidden lg:block">{{ auth.displayName }}</span>
                 <ChevronDown class="w-4 h-4 text-neutral-400" />
               </button>

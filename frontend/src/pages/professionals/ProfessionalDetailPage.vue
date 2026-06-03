@@ -9,11 +9,49 @@ import AppAvatar from '@/components/ui/AppAvatar.vue'
 import AppCard from '@/components/ui/AppCard.vue'
 import AppSpinner from '@/components/ui/AppSpinner.vue'
 import LocationMap from '@/components/ui/LocationMap.vue'
+import StarRating from '@/components/ui/StarRating.vue'
 
 const route = useRoute()
 const loading = ref(true)
 const error = ref(null)
 const professional = ref(null)
+
+const reviews = ref([])
+const reviewsMeta = ref(null)
+const reviewsLoading = ref(false)
+
+async function loadReviews() {
+  reviewsLoading.value = true
+  try {
+    const { data } = await api.get(`/professionals/${route.params.id}/reviews`, { params: { per_page: 5 } })
+    reviews.value = data.data ?? []
+    reviewsMeta.value = data.meta ?? null
+  } finally {
+    reviewsLoading.value = false
+  }
+}
+
+async function loadMoreReviews() {
+  if (!reviewsMeta.value || reviewsMeta.value.current_page >= reviewsMeta.value.last_page) return
+  reviewsLoading.value = true
+  try {
+    const { data } = await api.get(`/professionals/${route.params.id}/reviews`, {
+      params: { per_page: 5, page: reviewsMeta.value.current_page + 1 },
+    })
+    reviews.value = [...reviews.value, ...(data.data ?? [])]
+    reviewsMeta.value = data.meta ?? null
+  } finally {
+    reviewsLoading.value = false
+  }
+}
+
+function reviewerName(r) {
+  return [r.cliente?.nombre, r.cliente?.apellido].filter(Boolean).join(' ') || 'Cliente'
+}
+
+function formatFecha(iso) {
+  return new Date(iso).toLocaleDateString('es-UY', { day: 'numeric', month: 'long', year: 'numeric' })
+}
 
 const fullName = computed(() => {
   if (!professional.value) return ''
@@ -45,7 +83,10 @@ function formatPrice(price) {
   return new Intl.NumberFormat('es-UY', { style: 'currency', currency: 'UYU' }).format(price)
 }
 
-onMounted(loadProfessional)
+onMounted(async () => {
+  await loadProfessional()
+  loadReviews()
+})
 </script>
 
 <template>
@@ -141,6 +182,55 @@ onMounted(loadProfessional)
           </div>
         </AppCard>
       </div>
+
+      <!-- Reseñas -->
+      <div class="mb-8">
+        <div class="flex items-center gap-3 mb-4">
+          <h2 class="text-xl font-semibold text-neutral-900">Reseñas</h2>
+          <div v-if="professional.rating_count > 0" class="flex items-center gap-1 text-sm text-neutral-600">
+            <Star class="w-4 h-4 text-amber-400 fill-amber-400" />
+            <span class="font-medium">{{ professional.rating_avg }}</span>
+            <span class="text-neutral-400">({{ professional.rating_count }})</span>
+          </div>
+        </div>
+
+        <div v-if="reviewsLoading && reviews.length === 0" class="flex justify-center py-8">
+          <AppSpinner size="md" />
+        </div>
+
+        <div v-else-if="reviews.length === 0" class="text-neutral-500 text-sm">
+          Todavía no hay reseñas para este profesional.
+        </div>
+
+        <div v-else class="space-y-4">
+          <AppCard v-for="r in reviews" :key="r.id" padding="md">
+            <div class="flex items-start gap-3">
+              <AppAvatar
+                :name="reviewerName(r)"
+                :src="r.cliente?.foto_perfil"
+                size="sm"
+              />
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center justify-between gap-2 flex-wrap">
+                  <span class="text-sm font-medium text-neutral-900">{{ reviewerName(r) }}</span>
+                  <span class="text-xs text-neutral-400">{{ formatFecha(r.fecha) }}</span>
+                </div>
+                <StarRating :model-value="r.puntaje" readonly size="sm" class="mt-1" />
+                <p v-if="r.comentario" class="mt-2 text-sm text-neutral-600 leading-relaxed">
+                  {{ r.comentario }}
+                </p>
+              </div>
+            </div>
+          </AppCard>
+
+          <div v-if="reviewsMeta && reviewsMeta.current_page < reviewsMeta.last_page" class="text-center">
+            <AppButton variant="outline" size="sm" :disabled="reviewsLoading" @click="loadMoreReviews">
+              {{ reviewsLoading ? 'Cargando...' : 'Ver más reseñas' }}
+            </AppButton>
+          </div>
+        </div>
+      </div>
+
     </template>
   </div>
 </template>

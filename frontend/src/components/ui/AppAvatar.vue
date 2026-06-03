@@ -1,4 +1,6 @@
 <script setup>
+import { ref, watch } from 'vue'
+
 const props = defineProps({
   src: String,
   name: { type: String, default: '' },
@@ -35,11 +37,20 @@ const colorIndex = (name) => {
   if (!name) return 0
   return name.charCodeAt(0) % colors.length
 }
+
+const imgError = ref(false)
+watch(() => props.src, () => { imgError.value = false })
 </script>
 
 <template>
   <span :class="['inline-flex items-center justify-center rounded-full font-semibold overflow-hidden shrink-0', sizes[size]]">
-    <img v-if="src" :src="src" :alt="name" class="w-full h-full object-cover" />
+    <img
+      v-if="src && !imgError"
+      :src="src"
+      :alt="name"
+      class="w-full h-full object-cover"
+      @error="imgError = true"
+    />
     <span v-else :class="colors[colorIndex(name)]" class="w-full h-full flex items-center justify-center">
       {{ initials(name) }}
     </span>

@@ -34,7 +34,7 @@ class BookingController extends Controller
         $usuario = $request->user();
 
         $query = Booking::query()
-            ->with(['service', 'professionalProfile.user', 'client', 'payment'])
+            ->with(['service', 'professionalProfile.user', 'client', 'payment', 'review'])
             ->orderByDesc('fecha_hora');
 
         if ($usuario->role === UserRole::Client) {
@@ -55,6 +55,9 @@ class BookingController extends Controller
         if ($hasta = $request->string('to')->toString()) {
             $query->where('fecha_hora', '<=', Carbon::parse($hasta));
         }
+
+        $order = $request->string('order', 'desc')->toString() === 'asc' ? 'asc' : 'desc';
+        $query->reorder('fecha_hora', $order);
 
         $reservas = $query->paginate(
             perPage: min((int) $request->input('per_page', 20), 100)
@@ -304,13 +307,10 @@ class BookingController extends Controller
 
         $cambios = ['estado' => $siguiente];
 
-        if ($siguiente === BookingStatus::EnCurso && $reserva->modalidad === Modalidad::Virtual) {
-            // Placeholder: el endpoint /bookings/{id}/livekit-token completará esto.
-            $cambios['url_video_llamada'] = sprintf(
-                'livekit://room-%d-%s',
-                $reserva->id,
-                bin2hex(random_bytes(4)),
-            );
+        if ($siguiente === BookingStatus::EnCurso
+            && in_array($reserva->modalidad, [Modalidad::Virtual, Modalidad::Hibrida], true)
+        ) {
+            $cambios['url_video_llamada'] = "booking-{$reserva->id}";
         }
 
         $reserva->update($cambios);

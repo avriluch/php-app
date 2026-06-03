@@ -19,6 +19,7 @@
     "axios": "^1.16.1",
     "laravel-echo": "^2.3.4",
     "leaflet": "^1.9.4",
+    "livekit-client": "^2.19.1",
     "pinia": "^3.0.4",
     "pusher-js": "^8.5.0",
     "tailwindcss": "^4.3.0",

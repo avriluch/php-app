@@ -25,6 +25,7 @@ const navByRole = {
   ],
   professional: [
     { label: 'Panel', to: '/dashboard/professional', icon: LayoutDashboard },
+    { label: 'Reservas', to: '/dashboard/professional/bookings', icon: Calendar },
     { label: 'Agenda', to: '/dashboard/professional/schedule', icon: Calendar },
     { label: 'Clientes', to: '/dashboard/professional/clients', icon: Users },
     { label: 'Servicios', to: '/dashboard/professional/services', icon: Briefcase },
