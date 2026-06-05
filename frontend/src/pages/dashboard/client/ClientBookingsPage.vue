@@ -18,6 +18,9 @@ const reviewingId = ref(null)
 const reviewForm = ref({ puntaje: 0, comentario: '' })
 const reviewSubmitting = ref(false)
 const reviewError = ref(null)
+const cancellingId = ref(null)
+const cancelConfirmationId = ref(null)
+const cancelError = ref(null)
 
 const estadoConfig = {
   pendiente:   { label: 'Pendiente',   variant: 'default', icon: AlertCircle },
@@ -59,6 +62,33 @@ function openReview(bookingId) {
 function closeReview() {
   reviewingId.value = null
   reviewError.value = null
+}
+
+
+function openCancelConfirmation(booking) {
+  cancelConfirmationId.value = booking.id
+  cancelError.value = null
+}
+
+function closeCancelConfirmation() {
+  cancelConfirmationId.value = null
+  cancelError.value = null
+}
+
+async function confirmCancelBooking(booking) {
+  cancellingId.value = booking.id
+  cancelError.value = null
+
+  try {
+    const { data } = await api.patch(`/bookings/${booking.id}/cancel`)
+    const idx = bookings.value.findIndex(b => b.id === booking.id)
+    if (idx !== -1) bookings.value[idx] = data
+    closeCancelConfirmation()
+  } catch (e) {
+    cancelError.value = e.response?.data?.message ?? 'No se pudo eliminar la reserva.'
+  } finally {
+    cancellingId.value = null
+  }
 }
 
 async function submitReview(booking) {
@@ -168,6 +198,16 @@ async function submitReview(booking) {
             <!-- Botones de acción -->
             <div class="mt-3 flex flex-wrap gap-2">
               <AppButton
+                v-if="['pendiente', 'confirmada', 'pagada'].includes(b.estado)"
+                variant="outline" size="sm"
+                :class="'border-red-600 text-red-600 hover:bg-red-50'"
+                :disabled="cancelConfirmationId === b.id"
+                @click="openCancelConfirmation(b)"
+              >
+                Eliminar reserva
+              </AppButton>
+
+              <AppButton
                 v-if="b.payment?.estado === 'pendiente'"
                 variant="primary" size="sm" as="RouterLink" :to="`/pay/${b.id}/${b.payment.id}`"
               >
@@ -188,6 +228,31 @@ async function submitReview(booking) {
               >
                 <Star class="w-4 h-4 mr-1" /> Calificar
               </AppButton>
+            </div>
+
+            <div v-if="cancelConfirmationId === b.id" class="mt-4">
+              <AppCard padding="md" class="border-red-200 bg-red-50">
+                <div class="flex flex-col gap-3">
+                  <div>
+                    <p class="text-sm text-neutral-600">Esta acción cancelará la reserva y enviará un mail de cancelación.</p>
+                  </div>
+
+                  <div class="flex flex-wrap gap-2">
+                    <AppButton
+                      variant="outline" size="sm"
+                      :class="'border-red-600 text-red-600 hover:bg-red-50'"
+                      :loading="cancellingId === b.id"
+                      @click="confirmCancelBooking(b)"
+                    >
+                      {{ cancellingId === b.id ? 'Eliminando...' : 'Eliminar reserva' }}
+                    </AppButton>
+                    <AppButton variant="outline" size="sm" @click="closeCancelConfirmation">
+                      Volver
+                    </AppButton>
+                  </div>
+                  <p v-if="cancelError" class="text-sm text-red-600">{{ cancelError }}</p>
+                </div>
+              </AppCard>
             </div>
 
             <!-- Formulario de reseña inline -->

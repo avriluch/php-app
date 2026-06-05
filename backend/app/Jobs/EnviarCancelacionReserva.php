@@ -8,12 +8,13 @@ use App\Models\Booking;
 use App\Models\Notification;
 use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Mail;
 
 class EnviarCancelacionReserva implements ShouldQueue
 {
-    use Queueable;
+    use Dispatchable, Queueable;
 
     public function __construct(public int $reservaId)
     {

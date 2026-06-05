@@ -11,6 +11,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\BookingResource;
 use App\Jobs\EnviarCancelacionReserva;
 use App\Jobs\EnviarConfirmacionReserva;
+use App\Jobs\EnviarReagendacionReserva;
 use App\Models\Booking;
 use App\Models\PackagePurchase;
 use App\Models\Payment;
@@ -184,8 +185,8 @@ class BookingController extends Controller
 
             $reserva->load(['service', 'professionalProfile.user', 'payment']);
 
-            // Notificación + email asincrónicos (se ejecutan tras commit por la cola Redis).
-            EnviarConfirmacionReserva::dispatch($reserva->id);
+            // Notificación + email asincrónicos tras el commit.
+            EnviarConfirmacionReserva::dispatch($reserva->id)->afterCommit();
 
             return response()->json(new BookingResource($reserva), 201);
         });
@@ -232,7 +233,7 @@ class BookingController extends Controller
 
         $reserva->refresh()->load(['service', 'professionalProfile.user', 'payment']);
 
-        EnviarCancelacionReserva::dispatch($reserva->id);
+        EnviarCancelacionReserva::dispatch($reserva->id)->afterCommit();
 
         return response()->json(new BookingResource($reserva));
     }
@@ -261,6 +262,7 @@ class BookingController extends Controller
             'fecha_hora' => ['required', 'date', 'after:now'],
         ]);
 
+        $fechaAnterior = $reserva->fecha_hora?->format('d/m/Y H:i');
         $nuevaFecha = Carbon::parse($datos['fecha_hora']);
 
         DB::transaction(function () use ($reserva, $nuevaFecha) {
@@ -279,6 +281,8 @@ class BookingController extends Controller
         });
 
         $reserva->refresh()->load(['service', 'professionalProfile.user', 'payment']);
+
+        EnviarReagendacionReserva::dispatch($reserva->id, $fechaAnterior)->afterCommit();
 
         return response()->json(new BookingResource($reserva));
     }
