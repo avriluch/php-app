@@ -19,7 +19,6 @@ class PayPalService
         $this->clientId = config('services.paypal.client_id');
         $this->clientSecret = config('services.paypal.client_secret');
     }
-
     private function getAccessToken(): string
     {
         $response = Http::withBasicAuth($this->clientId, $this->clientSecret)
