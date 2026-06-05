@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\MeController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PackagePurchaseController;
 use App\Http\Controllers\Api\PaymentController;
+use App\Http\Controllers\Api\ProfessionalClientController;
 use App\Http\Controllers\Api\ProfessionalController;
 use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\ServiceController;
@@ -29,6 +30,8 @@ Route::prefix('auth')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/me', [AuthController::class, 'me']);
         Route::patch('/me', [AuthController::class, 'updateMe']);
+        Route::post('/me/avatar', [AuthController::class, 'uploadAvatar']);
+        Route::delete('/me/avatar', [AuthController::class, 'deleteAvatar']);
         Route::post('/logout', [AuthController::class, 'logout']);
     });
 });
@@ -78,6 +81,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Paquetes (cliente)
     Route::middleware('role:client')->group(function () {
         Route::get('/package-purchases', [PackagePurchaseController::class, 'index']);
+        Route::get('/package-purchases/{id}', [PackagePurchaseController::class, 'show'])->whereNumber('id');
         Route::post('/package-purchases', [PackagePurchaseController::class, 'store']);
     });
 
@@ -89,6 +93,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/agenda/exceptions/{id}', [AgendaController::class, 'destroyException'])->whereNumber('id');
 
         Route::get('/reviews', [ReviewController::class, 'misProfesionales']);
+        Route::get('/package-purchases', [PackagePurchaseController::class, 'indexProfessional']);
+        Route::get('/clients', [ProfessionalClientController::class, 'index']);
         Route::get('/services', [ServiceController::class, 'index']);
         Route::post('/services', [ServiceController::class, 'store']);
         Route::patch('/services/{id}', [ServiceController::class, 'update'])->whereNumber('id');

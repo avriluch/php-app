@@ -1,68 +1,32 @@
 <script setup>
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted } from 'vue'
+import { useRouter, RouterLink } from 'vue-router'
 import { Search, MapPin, Star, Clock, Video, Users, Shield, Zap, ArrowRight, CheckCircle } from '@lucide/vue'
+import api from '@/services/api'
 import AppButton from '@/components/ui/AppButton.vue'
 import AppCard from '@/components/ui/AppCard.vue'
 import AppBadge from '@/components/ui/AppBadge.vue'
 import AppAvatar from '@/components/ui/AppAvatar.vue'
+import AppSpinner from '@/components/ui/AppSpinner.vue'
 
 const router = useRouter()
 const search = ref('')
 
-const handleSearch = () => {
-  if (search.value.trim()) {
-    router.push({ name: 'professionals', query: { q: search.value } })
-  } else {
-    router.push({ name: 'professionals' })
-  }
-}
+const totalProfessionals = ref(0)
+const cityList = ref([])
+const featured = ref([])
+const loadingHome = ref(true)
+const categoryCounts = ref({})
 
 const categories = [
-  { name: 'Consultoría', emoji: '💼', count: 48 },
-  { name: 'Entrenamiento', emoji: '🏋️', count: 32 },
-  { name: 'Educación', emoji: '📚', count: 61 },
-  { name: 'Salud', emoji: '🩺', count: 27 },
-  { name: 'Tecnología', emoji: '💻', count: 40 },
-  { name: 'Diseño', emoji: '🎨', count: 19 },
-  { name: 'Legal', emoji: '⚖️', count: 14 },
-  { name: 'Finanzas', emoji: '📊', count: 23 },
-]
-
-const featured = [
-  {
-    id: 1,
-    name: 'Valentina Ramos',
-    specialty: 'Coach de vida & carrera',
-    rating: 4.9,
-    reviews: 87,
-    price: 3500,
-    modality: 'Presencial y virtual',
-    location: 'Buenos Aires',
-    tags: ['Coaching', 'Carrera', 'Liderazgo'],
-  },
-  {
-    id: 2,
-    name: 'Marcos Fernández',
-    specialty: 'Entrenador personal',
-    rating: 4.8,
-    reviews: 124,
-    price: 2800,
-    modality: 'Presencial',
-    location: 'Córdoba',
-    tags: ['Fitness', 'Nutrición', 'Fuerza'],
-  },
-  {
-    id: 3,
-    name: 'Lucía Moreno',
-    specialty: 'Psicóloga clínica',
-    rating: 5.0,
-    reviews: 56,
-    price: 4200,
-    modality: 'Virtual',
-    location: 'Remoto',
-    tags: ['Psicología', 'Ansiedad', 'TCC'],
-  },
+  { name: 'Salud', emoji: '🩺', search: 'psicolog' },
+  { name: 'Entrenamiento', emoji: '🏋️', search: 'entrenador' },
+  { name: 'Educación', emoji: '📚', search: 'inglés' },
+  { name: 'Consultoría', emoji: '💼', search: 'coach' },
+  { name: 'Tecnología', emoji: '💻', search: 'diseñador' },
+  { name: 'Legal', emoji: '⚖️', search: 'abogad' },
+  { name: 'Finanzas', emoji: '📊', search: 'contador' },
+  { name: 'Nutrición', emoji: '🥗', search: 'nutricion' },
 ]
 
 const steps = [
@@ -92,6 +56,74 @@ const features = [
   { icon: Users, title: 'Paquetes de sesiones', description: 'Comprá múltiples sesiones con descuento.' },
   { icon: Zap, title: 'Recordatorios automáticos', description: 'Te avisamos antes de cada turno por email.' },
 ]
+
+function fullName(pro) {
+  return `${pro.nombre} ${pro.apellido}`.trim()
+}
+
+function modalidadLabel(m) {
+  return { virtual: 'Virtual', presencial: 'Presencial', hibrida: 'Híbrida' }[m] ?? m
+}
+
+function modalidadesTexto(pro) {
+  if (!pro.modalidades?.length) return '—'
+  return pro.modalidades.map(modalidadLabel).join(' · ')
+}
+
+function formatPrice(n) {
+  if (n == null) return '—'
+  return new Intl.NumberFormat('es-UY', { style: 'currency', currency: 'UYU', maximumFractionDigits: 0 }).format(n)
+}
+
+function handleSearch() {
+  const term = search.value.trim()
+  router.push({
+    name: 'professionals',
+    query: term ? { search: term } : {},
+  })
+}
+
+function goCategory(cat) {
+  router.push({ name: 'professionals', query: { search: cat.search } })
+}
+
+function countForCategory(searchTerm) {
+  return categoryCounts.value[searchTerm] ?? 0
+}
+
+async function loadHomeData() {
+  loadingHome.value = true
+  try {
+    const [statsRes, featuredRes, allRes] = await Promise.all([
+      api.get('/professionals', { params: { per_page: 1 } }),
+      api.get('/professionals', { params: { sort: 'rating', per_page: 3 } }),
+      api.get('/professionals', { params: { per_page: 50 } }),
+    ])
+
+    totalProfessionals.value = statsRes.data.meta?.total ?? 0
+    featured.value = featuredRes.data.data ?? []
+
+    const all = allRes.data.data ?? []
+    const cities = [...new Set(all.map((p) => p.ubicacion?.ciudad).filter(Boolean))]
+    cityList.value = cities.slice(0, 4)
+
+    const counts = {}
+    for (const cat of categories) {
+      counts[cat.search] = all.filter((p) => {
+        const text = `${p.titulo} ${p.nombre} ${p.apellido}`.toLowerCase()
+        return text.includes(cat.search.toLowerCase())
+      }).length
+    }
+    categoryCounts.value = counts
+  } catch {
+    featured.value = []
+    totalProfessionals.value = 0
+  } finally {
+    loadingHome.value = false
+  }
+}
+
+onMounted(loadHomeData)
 </script>
 
 <template>
@@ -106,12 +138,12 @@ const features = [
 
       <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-28">
         <div class="max-w-3xl">
-          <span class="inline-flex items-center gap-2 px-3 py-1.5 bg-white/10 rounded-full text-sm font-medium mb-6">
+          <span class="inline-flex items-center gap-2 px-3 py-1.5 bg-white/10 rounded-full text-sm font-medium text-white mb-6">
             <span class="w-2 h-2 bg-accent-400 rounded-full animate-pulse" />
             Plataforma de servicios profesionales
           </span>
 
-          <h1 class="text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight text-balance mb-6">
+          <h1 class="text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight text-balance mb-6 text-white">
             Conectá con los mejores <span class="text-accent-300">profesionales</span>
           </h1>
 
@@ -119,14 +151,13 @@ const features = [
             Reservá turnos, agendá sesiones y gestioná tus servicios. Todo en un solo lugar, presencial o remoto.
           </p>
 
-          <!-- Buscador -->
           <div class="flex flex-col sm:flex-row gap-3 bg-white rounded-2xl p-2 max-w-xl shadow-lg">
             <div class="flex-1 flex items-center gap-2 px-3">
               <Search class="w-5 h-5 text-neutral-400 shrink-0" />
               <input
                 v-model="search"
                 type="text"
-                placeholder="¿Qué profesional buscás?"
+                placeholder="¿Qué profesional buscás? (nombre, especialidad...)"
                 class="flex-1 text-neutral-900 text-sm outline-none placeholder:text-neutral-400 bg-transparent"
                 @keydown.enter="handleSearch"
               />
@@ -137,7 +168,15 @@ const features = [
           </div>
 
           <p class="mt-4 text-sm text-primary-200">
-            Más de "x" profesionales disponibles en todo el país· Montevideo, San José, Maldonado y más
+            <template v-if="totalProfessionals > 0">
+              {{ totalProfessionals }} profesional{{ totalProfessionals !== 1 ? 'es' : '' }} disponibles
+              <template v-if="cityList.length">
+                · {{ cityList.join(', ') }}{{ cityList.length >= 4 ? ' y más' : '' }}
+              </template>
+            </template>
+            <template v-else-if="!loadingHome">
+              Explorá profesionales en Uruguay
+            </template>
           </p>
         </div>
       </div>
@@ -156,11 +195,13 @@ const features = [
             v-for="cat in categories"
             :key="cat.name"
             class="flex flex-col items-center gap-2 p-4 rounded-xl border border-neutral-200 hover:border-primary-300 hover:bg-primary-50 transition-colors cursor-pointer group"
-            @click="router.push({ name: 'professionals', query: { category: cat.name } })"
+            @click="goCategory(cat)"
           >
             <span class="text-2xl group-hover:scale-110 transition-transform">{{ cat.emoji }}</span>
             <span class="text-xs font-medium text-neutral-700 text-center">{{ cat.name }}</span>
-            <span class="text-xs text-neutral-400">{{ cat.count }}</span>
+            <span class="text-xs text-neutral-400">
+              {{ countForCategory(cat.search) || 'Ver' }}
+            </span>
           </button>
         </div>
       </div>
@@ -179,7 +220,16 @@ const features = [
           </AppButton>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div v-if="loadingHome" class="flex justify-center py-16">
+          <AppSpinner size="lg" />
+        </div>
+
+        <p v-else-if="featured.length === 0" class="text-center text-neutral-500 py-12">
+          Todavía no hay profesionales publicados.
+          <RouterLink to="/professionals" class="text-primary-600 hover:underline ml-1">Ver listado</RouterLink>
+        </p>
+
+        <div v-else class="grid grid-cols-1 md:grid-cols-3 gap-6">
           <AppCard
             v-for="pro in featured"
             :key="pro.id"
@@ -187,42 +237,50 @@ const features = [
             padding="none"
             as="div"
           >
-            <!-- Header color -->
             <div class="h-24 bg-gradient-to-br from-primary-500 to-primary-700 rounded-t-xl" />
 
             <div class="px-6 pb-6">
-              <!-- Avatar flotante -->
               <div class="-mt-8 mb-4">
-                <AppAvatar :name="pro.name" size="xl" />
+                <AppAvatar :name="fullName(pro)" :src="pro.foto_perfil" size="xl" />
               </div>
 
               <div class="flex items-start justify-between gap-2 mb-2">
                 <div>
-                  <h3 class="font-semibold text-neutral-900">{{ pro.name }}</h3>
-                  <p class="text-sm text-neutral-500">{{ pro.specialty }}</p>
+                  <h3 class="font-semibold text-neutral-900">{{ fullName(pro) }}</h3>
+                  <p class="text-sm text-neutral-500">{{ pro.titulo }}</p>
                 </div>
-                <div class="flex items-center gap-1 shrink-0">
+                <div v-if="pro.rating_count > 0" class="flex items-center gap-1 shrink-0">
                   <Star class="w-4 h-4 text-amber-400 fill-amber-400" />
-                  <span class="text-sm font-semibold text-neutral-900">{{ pro.rating }}</span>
-                  <span class="text-xs text-neutral-400">({{ pro.reviews }})</span>
+                  <span class="text-sm font-semibold text-neutral-900">{{ pro.rating_avg }}</span>
+                  <span class="text-xs text-neutral-400">({{ pro.rating_count }})</span>
                 </div>
               </div>
 
-              <div class="flex items-center gap-1 text-xs text-neutral-500 mb-3">
+              <div v-if="pro.ubicacion" class="flex items-center gap-1 text-xs text-neutral-500 mb-3">
                 <MapPin class="w-3.5 h-3.5" />
-                {{ pro.location }} · {{ pro.modality }}
+                {{ pro.ubicacion.ciudad }}, {{ pro.ubicacion.pais }}
+                <span v-if="pro.modalidades?.length"> · {{ modalidadesTexto(pro) }}</span>
               </div>
+              <p v-else class="text-xs text-neutral-500 mb-3">{{ modalidadesTexto(pro) }}</p>
 
               <div class="flex flex-wrap gap-1 mb-4">
-                <AppBadge v-for="tag in pro.tags" :key="tag" variant="default" size="xs">
-                  {{ tag }}
+                <AppBadge
+                  v-for="m in pro.modalidades"
+                  :key="m"
+                  variant="primary"
+                  size="sm"
+                >
+                  {{ modalidadLabel(m) }}
                 </AppBadge>
               </div>
 
               <div class="flex items-center justify-between">
                 <div>
                   <span class="text-xs text-neutral-400">Desde</span>
-                  <p class="font-bold text-neutral-900">${{ pro.price.toLocaleString() }}<span class="text-xs font-normal text-neutral-500">/sesión</span></p>
+                  <p class="font-bold text-neutral-900">
+                    {{ formatPrice(pro.precio_desde) }}
+                    <span v-if="pro.precio_desde" class="text-xs font-normal text-neutral-500">/sesión</span>
+                  </p>
                 </div>
                 <AppButton
                   variant="primary"
@@ -261,24 +319,24 @@ const features = [
     </section>
 
     <!-- ── Features ───────────────────────────────────── -->
-    <section class="py-16 bg-primary-900 text-white">
+    <section class="py-16 bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="text-center mb-12">
-          <h2 class="text-2xl sm:text-3xl font-bold mb-2">Todo lo que necesitás</h2>
-          <p class="text-primary-300">Una plataforma completa para profesionales y clientes</p>
+          <h2 class="text-2xl sm:text-3xl font-bold text-white mb-2">Todo lo que necesitás</h2>
+          <p class="text-primary-100 text-base">Una plataforma completa para profesionales y clientes</p>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <div
             v-for="feat in features"
             :key="feat.title"
-            class="bg-white/5 rounded-2xl p-6 border border-white/10 hover:bg-white/10 transition-colors"
+            class="rounded-2xl p-6 border border-white/15 bg-white/10 hover:bg-white/15 transition-colors"
           >
-            <div class="w-10 h-10 rounded-xl bg-accent-500/20 flex items-center justify-center mb-4">
-              <component :is="feat.icon" class="w-5 h-5 text-accent-300" />
+            <div class="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center mb-4">
+              <component :is="feat.icon" class="w-5 h-5 text-accent-200" />
             </div>
-            <h3 class="font-semibold mb-2">{{ feat.title }}</h3>
-            <p class="text-sm text-primary-300 leading-relaxed">{{ feat.description }}</p>
+            <h3 class="font-semibold text-white mb-2">{{ feat.title }}</h3>
+            <p class="text-sm text-primary-100 leading-relaxed">{{ feat.description }}</p>
           </div>
         </div>
       </div>

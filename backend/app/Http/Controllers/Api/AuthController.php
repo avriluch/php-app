@@ -13,6 +13,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -106,7 +107,62 @@ class AuthController extends Controller
 
         $usuario->save();
 
-        return response()->json(new UserResource($usuario));
+        return response()->json(new UserResource($usuario->load('professionalProfile')));
+    }
+
+    public function uploadAvatar(Request $request): JsonResponse
+    {
+        $usuario = $request->user();
+
+        $datos = $request->validate([
+            'avatar' => ['required', 'image', 'mimes:jpeg,jpg,png,webp', 'max:2048'],
+        ]);
+
+        $this->eliminarAvatarLocal($usuario->foto_perfil);
+
+        $ruta = $datos['avatar']->store('avatars', 'public');
+        $usuario->foto_perfil = '/storage/'.$ruta;
+        $usuario->save();
+
+        $usuario->load('professionalProfile');
+
+        return response()->json([
+            'message' => 'Foto de perfil actualizada.',
+            'user' => (new UserResource($usuario))->resolve(),
+        ]);
+    }
+
+    public function deleteAvatar(Request $request): JsonResponse
+    {
+        $usuario = $request->user();
+
+        $this->eliminarAvatarLocal($usuario->foto_perfil);
+        $usuario->foto_perfil = null;
+        $usuario->save();
+
+        $usuario->load('professionalProfile');
+
+        return response()->json([
+            'message' => 'Foto de perfil eliminada.',
+            'user' => (new UserResource($usuario))->resolve(),
+        ]);
+    }
+
+    private function eliminarAvatarLocal(?string $url): void
+    {
+        if (! $url) {
+            return;
+        }
+
+        $path = parse_url($url, PHP_URL_PATH);
+        if (! $path || ! str_contains($path, '/storage/avatars/')) {
+            return;
+        }
+
+        $relativo = ltrim(str_replace('/storage/', '', $path), '/');
+        if ($relativo !== '') {
+            Storage::disk('public')->delete($relativo);
+        }
     }
 
     public function logout(Request $request): JsonResponse

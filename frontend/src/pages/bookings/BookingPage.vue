@@ -12,8 +12,14 @@ const route = useRoute()
 const router = useRouter()
 
 const professionalId = Number(route.params.professionalId)
+const packagePurchaseId = computed(() => {
+  const q = route.query.package_purchase_id
+  return q ? Number(q) : null
+})
 
 const step = ref(1)
+const packagePurchase = ref(null)
+const usingPackage = computed(() => Boolean(packagePurchase.value))
 const loading = ref(true)
 const submitting = ref(false)
 const error = ref(null)
@@ -44,17 +50,56 @@ const formatDateDisplay = (dateStr) => {
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('es-UY', { weekday: 'long', day: 'numeric', month: 'long' })
 }
 
+const bookableServices = computed(() => {
+  const list = services.value ?? []
+  if (usingPackage.value && packagePurchase.value?.service?.id) {
+    return list.filter((s) => s.id === packagePurchase.value.service.id)
+  }
+  return list.filter((s) => s.type !== 'package')
+})
+
 async function loadData() {
   loading.value = true
+  error.value = null
   try {
-    const [profRes, svcRes] = await Promise.all([
+    const requests = [
       api.get(`/professionals/${professionalId}`),
       api.get(`/professionals/${professionalId}/services`),
-    ])
-    professional.value = profRes.data
-    services.value = svcRes.data.data ?? []
-  } catch {
-    error.value = 'No se pudo cargar el profesional.'
+    ]
+    if (packagePurchaseId.value) {
+      requests.push(api.get(`/package-purchases/${packagePurchaseId.value}`))
+    }
+    const results = await Promise.all(requests)
+    professional.value = results[0].data
+    services.value = results[1].data.data ?? []
+
+    if (packagePurchaseId.value) {
+      packagePurchase.value = results[2].data
+      const profId = packagePurchase.value?.profesional?.id
+      if (profId && profId !== professionalId) {
+        error.value = 'Este paquete no corresponde a este profesional.'
+        return
+      }
+      if (packagePurchase.value?.payment?.estado !== 'completado') {
+        error.value = 'Completá el pago del paquete antes de reservar sesiones.'
+        return
+      }
+      if ((packagePurchase.value?.sesiones_restantes ?? 0) <= 0) {
+        error.value = 'Este paquete no tiene sesiones restantes.'
+        return
+      }
+      const svc = packagePurchase.value?.service
+      if (svc) {
+        const match = services.value.find((s) => s.id === svc.id)
+        if (match) {
+          selectedService.value = match
+          selectedModalidad.value = match.modalidad !== 'hibrida' ? match.modalidad : ''
+          step.value = 2
+        }
+      }
+    }
+  } catch (e) {
+    error.value = e.response?.data?.message ?? 'No se pudo cargar el profesional.'
   } finally {
     loading.value = false
   }
@@ -69,7 +114,11 @@ watch(selectedDate, async (date) => {
     const { data } = await api.get(`/professionals/${professionalId}/availability`, {
       params: { service_id: selectedService.value.id, from: date, to: date },
     })
-    slots.value = data.slots ?? []
+    const ahora = Date.now()
+    slots.value = (data.slots ?? []).map((slot) => ({
+      ...slot,
+      available: slot.available && new Date(slot.start).getTime() > ahora,
+    }))
   } catch {
     slots.value = []
   } finally {
@@ -85,23 +134,36 @@ function selectService(svc) {
   step.value = 2
 }
 
+function isSlotInFuture(slot) {
+  return slot?.start && new Date(slot.start).getTime() > Date.now()
+}
+
 function selectSlot(slot) {
-  if (!slot.available) return
+  if (!slot.available || !isSlotInFuture(slot)) return
   selectedSlot.value = slot
   step.value = 3
 }
 
 async function confirmBooking() {
   if (!selectedSlot.value || !selectedModalidad.value) return
+  if (!isSlotInFuture(selectedSlot.value)) {
+    error.value = 'Ese horario ya pasó. Elegí otro turno.'
+    step.value = 2
+    return
+  }
   submitting.value = true
   error.value = null
   try {
-    const { data } = await api.post('/bookings', {
+    const payload = {
       service_id: selectedService.value.id,
       professional_id: professionalId,
       fecha_hora: selectedSlot.value.start,
       modalidad: selectedModalidad.value,
-    })
+    }
+    if (usingPackage.value) {
+      payload.package_purchase_id = packagePurchase.value.id
+    }
+    const { data } = await api.post('/bookings', payload)
     if (data.payment?.id) {
       router.push(`/pay/${data.id}/${data.payment.id}`)
     } else {
@@ -129,8 +191,13 @@ onMounted(loadData)
 
     <template v-else-if="professional">
       <div class="mb-8">
-        <h1 class="text-2xl font-bold text-neutral-900 mb-1">Reservar turno</h1>
+        <h1 class="text-2xl font-bold text-neutral-900 mb-1">
+          {{ usingPackage ? 'Reservar sesión del paquete' : 'Reservar turno' }}
+        </h1>
         <p class="text-neutral-500">con {{ professional.nombre }} {{ professional.apellido }} · {{ professional.titulo }}</p>
+        <p v-if="usingPackage" class="text-sm text-primary-600 mt-1">
+          {{ packagePurchase.sesiones_restantes }} sesión(es) restante(s) · {{ packagePurchase.service?.nombre }}
+        </p>
       </div>
 
       <!-- Indicador de pasos -->
@@ -155,10 +222,12 @@ onMounted(loadData)
       <!-- PASO 1: Servicio -->
       <div v-if="step === 1">
         <h2 class="text-lg font-semibold text-neutral-900 mb-4">Elegí un servicio</h2>
-        <p v-if="services.length === 0" class="text-neutral-500 text-sm">Este profesional no tiene servicios disponibles.</p>
+        <p v-if="bookableServices.length === 0" class="text-neutral-500 text-sm">
+          {{ usingPackage ? 'No se encontró el servicio del paquete.' : 'Este profesional no tiene servicios disponibles para reservar.' }}
+        </p>
         <div class="grid gap-3 sm:grid-cols-2">
           <AppCard
-            v-for="svc in services"
+            v-for="svc in bookableServices"
             :key="svc.id"
             hover
             class="cursor-pointer"
@@ -281,9 +350,13 @@ onMounted(loadData)
               </button>
             </div>
           </div>
-          <div class="flex justify-between py-3">
+          <div v-if="!usingPackage" class="flex justify-between py-3">
             <span class="text-sm text-neutral-500">Total</span>
             <span class="text-lg font-bold text-primary-600">{{ formatPrice(selectedService?.precio) }}</span>
+          </div>
+          <div v-else class="flex justify-between py-3">
+            <span class="text-sm text-neutral-500">Pago</span>
+            <span class="text-sm font-medium text-accent-600">Incluido en tu paquete</span>
           </div>
         </AppCard>
 
@@ -297,9 +370,11 @@ onMounted(loadData)
           :disabled="!selectedModalidad"
           @click="confirmBooking"
         >
-          Confirmar y pagar
+          {{ usingPackage ? 'Confirmar reserva' : 'Confirmar y pagar' }}
         </AppButton>
-        <p class="text-xs text-neutral-400 text-center mt-2">Serás redirigido a PayPal para completar el pago</p>
+        <p v-if="!usingPackage" class="text-xs text-neutral-400 text-center mt-2">
+          Serás redirigido a PayPal para completar el pago
+        </p>
       </div>
     </template>
 

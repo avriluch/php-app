@@ -44,6 +44,12 @@ const router = createRouter({
           meta: { requiresAuth: true },
         },
         {
+          path: 'pay/package/:purchaseId/:paymentId',
+          name: 'payment-package',
+          component: () => import('@/pages/payments/PaymentPage.vue'),
+          meta: { requiresAuth: true },
+        },
+        {
           path: 'call/:bookingId',
           name: 'video-call',
           component: () => import('@/pages/call/VideoCallPage.vue'),
@@ -96,11 +102,7 @@ const router = createRouter({
         {
           path: 'packages',
           name: 'client-packages',
-          component: placeholder,
-          meta: {
-            pageTitle: 'Mis paquetes',
-            pageDescription: 'Paquetes de sesiones comprados y sesiones restantes.',
-          },
+          component: () => import('@/pages/dashboard/client/ClientPackagesPage.vue'),
         },
         {
           path: 'reviews',
@@ -153,8 +155,8 @@ const router = createRouter({
         {
           path: 'clients',
           name: 'professional-clients',
-          component: placeholder,
-          meta: { pageTitle: 'Clientes', pageDescription: 'Personas que reservaron con vos.' },
+          component: () =>
+            import('@/pages/dashboard/professional/ProfessionalClientsPage.vue'),
         },
         {
           path: 'services',
@@ -166,8 +168,8 @@ const router = createRouter({
         {
           path: 'packages',
           name: 'professional-packages',
-          component: placeholder,
-          meta: { pageTitle: 'Paquetes', pageDescription: 'Paquetes de múltiples sesiones.' },
+          component: () =>
+            import('@/pages/dashboard/professional/ProfessionalPackagesPage.vue'),
         },
         {
           path: 'reviews',

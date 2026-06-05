@@ -6,6 +6,9 @@ import { useNotificationsStore } from '@/stores/notifications'
 /** Acepta usuario plano o envuelto en { data } (respuesta antigua de /auth/me). */
 function normalizeUser(raw) {
   if (!raw) return null
+  if (raw.user && typeof raw.user === 'object' && raw.user.id != null) {
+    return raw.user
+  }
   if (raw.data && typeof raw.data === 'object' && raw.nombre === undefined) {
     return raw.data
   }
@@ -45,8 +48,30 @@ export const useAuthStore = defineStore('auth', () => {
     return data
   }
 
-  const register = async (payload) => {
-    const { data } = await api.post('/auth/register', payload)
+  /** Convierte el formulario de RegisterPage al contrato de la API. */
+  const buildRegisterPayload = (form) => {
+    const partes = form.name.trim().split(/\s+/).filter(Boolean)
+    const nombre = partes[0] ?? ''
+    const apellido = partes.slice(1).join(' ') || nombre
+
+    const payload = {
+      nombre,
+      apellido,
+      email: form.email,
+      password: form.password,
+      password_confirmation: form.password_confirmation,
+      role: form.role,
+    }
+
+    if (form.role === 'professional') {
+      payload.titulo = form.titulo?.trim() || 'Profesional'
+    }
+
+    return payload
+  }
+
+  const register = async (form) => {
+    const { data } = await api.post('/auth/register', buildRegisterPayload(form))
     setSession(data.user, data.token)
     return data
   }
@@ -71,6 +96,39 @@ export const useAuthStore = defineStore('auth', () => {
     return user.value
   }
 
+  const updateProfile = async (payload) => {
+    const { data } = await api.patch('/auth/me', payload)
+    user.value = normalizeUser(data)
+    localStorage.setItem('user', JSON.stringify(user.value))
+    return user.value
+  }
+
+  const uploadAvatar = async (file) => {
+    const formData = new FormData()
+    formData.append('avatar', file)
+    const { data } = await api.post('/auth/me/avatar', formData)
+    const actualizado = normalizeUser(data.user ?? data)
+    if (actualizado?.id) {
+      user.value = actualizado
+    } else {
+      await fetchMe()
+    }
+    localStorage.setItem('user', JSON.stringify(user.value))
+    return user.value
+  }
+
+  const removeAvatar = async () => {
+    const { data } = await api.delete('/auth/me/avatar')
+    const actualizado = normalizeUser(data.user ?? data)
+    if (actualizado?.id) {
+      user.value = actualizado
+    } else {
+      await fetchMe()
+    }
+    localStorage.setItem('user', JSON.stringify(user.value))
+    return user.value
+  }
+
   // Restaurar header de axios al iniciar
   if (token.value) {
     api.defaults.headers.common['Authorization'] = `Bearer ${token.value}`
@@ -86,9 +144,13 @@ export const useAuthStore = defineStore('auth', () => {
     isAdmin,
     displayName,
     setToken,
+    buildRegisterPayload,
     login,
     register,
     logout,
     fetchMe,
+    updateProfile,
+    uploadAvatar,
+    removeAvatar,
   }
 })

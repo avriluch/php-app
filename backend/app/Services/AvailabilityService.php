@@ -47,6 +47,7 @@ class AvailabilityService
         );
 
         $slots = collect();
+        $ahora = Carbon::now();
         // El rango [desde, hasta] se interpreta como días completos: desde el inicio
         // del día "desde" hasta el fin del día "hasta", inclusive.
         $diaActual = $desde->copy()->startOfDay();
@@ -64,6 +65,12 @@ class AvailabilityService
 
                 while ($inicioSlot->copy()->addMinutes($duracionMinutos)->lte($finJornada)) {
                     $finSlot = $inicioSlot->copy()->addMinutes($duracionMinutos);
+
+                    // No ofrecer turnos que ya empezaron (mismo día u horario pasado).
+                    if ($inicioSlot->lt($ahora)) {
+                        $inicioSlot->addMinutes($pasoMinutos);
+                        continue;
+                    }
 
                     if ($finSlot->gte($desde) && $inicioSlot->lte($limiteSuperior)) {
                         $disponible = ! $this->seSolapa(
@@ -99,6 +106,10 @@ class AvailabilityService
         int $duracionMinutos,
         ?int $ignorarReservaId = null,
     ): bool {
+        if ($inicio->lt(Carbon::now())) {
+            return false;
+        }
+
         $fin = $inicio->copy()->addMinutes($duracionMinutos);
 
         $reservas = $this->cargarReservasActivas(

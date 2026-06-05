@@ -258,7 +258,7 @@ class BookingController extends Controller
         }
 
         $datos = $request->validate([
-            'fecha_hora' => ['required', 'date'],
+            'fecha_hora' => ['required', 'date', 'after:now'],
         ]);
 
         $nuevaFecha = Carbon::parse($datos['fecha_hora']);

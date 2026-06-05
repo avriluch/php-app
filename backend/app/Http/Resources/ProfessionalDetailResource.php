@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Support\ProfilePhotoUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -18,7 +19,7 @@ class ProfessionalDetailResource extends JsonResource
             'apellido' => $user->apellido,
             'titulo' => $this->titulo,
             'descripcion' => $this->descripcion,
-            'foto_perfil' => $user->foto_perfil,
+            'foto_perfil' => ProfilePhotoUrl::resolve($user->foto_perfil),
             'telefono' => $user->telefono,
             'rating_avg' => round((float) ($this->reviews_avg_puntaje ?? 0), 1),
             'rating_count' => (int) ($this->reviews_count ?? 0),

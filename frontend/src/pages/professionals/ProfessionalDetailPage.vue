@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 import { Star, MapPin, Video, Clock, Calendar } from '@lucide/vue'
 import api from '@/services/api'
 import AppButton from '@/components/ui/AppButton.vue'
@@ -12,7 +13,11 @@ import LocationMap from '@/components/ui/LocationMap.vue'
 import StarRating from '@/components/ui/StarRating.vue'
 
 const route = useRoute()
+const router = useRouter()
+const auth = useAuthStore()
 const loading = ref(true)
+const buyingServiceId = ref(null)
+const buyError = ref(null)
 const error = ref(null)
 const professional = ref(null)
 
@@ -81,6 +86,31 @@ function modalidadLabel(m) {
 
 function formatPrice(price) {
   return new Intl.NumberFormat('es-UY', { style: 'currency', currency: 'UYU' }).format(price)
+}
+
+async function buyPackage(svc) {
+  buyError.value = null
+  if (!auth.isLoggedIn) {
+    router.push({ name: 'login', query: { redirect: route.fullPath } })
+    return
+  }
+  if (!auth.isClient) {
+    buyError.value = 'Solo los clientes pueden comprar paquetes.'
+    return
+  }
+  buyingServiceId.value = svc.id
+  try {
+    const { data } = await api.post('/package-purchases', { service_id: svc.id })
+    if (data.payment?.estado === 'pendiente' && data.payment?.id) {
+      router.push(`/pay/package/${data.id}/${data.payment.id}`)
+    } else {
+      router.push('/dashboard/client/packages')
+    }
+  } catch (e) {
+    buyError.value = e.response?.data?.message ?? 'No se pudo iniciar la compra del paquete.'
+  } finally {
+    buyingServiceId.value = null
+  }
 }
 
 onMounted(async () => {
@@ -159,6 +189,8 @@ onMounted(async () => {
         />
       </AppCard>
 
+      <p v-if="buyError" class="text-sm text-red-600 mb-4">{{ buyError }}</p>
+
       <h2 class="text-xl font-semibold text-neutral-900 mb-4">Servicios</h2>
       <div v-if="!professional.servicios?.length" class="text-neutral-500 text-sm mb-8">
         Sin servicios publicados.
@@ -177,9 +209,29 @@ onMounted(async () => {
           <div class="flex flex-wrap gap-2 mt-3 text-sm text-neutral-600">
             <AppBadge variant="default" size="sm">{{ modalidadLabel(svc.modalidad) }}</AppBadge>
             <span v-if="svc.duracion">{{ svc.duracion }} min</span>
-            <span v-if="svc.type === 'package'">· {{ svc.cantidad_sesiones }} sesiones</span>
-            <Video v-if="svc.modalidad === 'virtual'" class="w-4 h-4 text-primary-500" />
-          </div>
+              <span v-if="svc.type === 'package'">· {{ svc.cantidad_sesiones }} sesiones</span>
+              <Video v-if="svc.modalidad === 'virtual'" class="w-4 h-4 text-primary-500" />
+            </div>
+            <AppButton
+              v-if="svc.type === 'package' && auth.isClient"
+              variant="primary"
+              size="sm"
+              class="mt-4 w-full"
+              :loading="buyingServiceId === svc.id"
+              @click="buyPackage(svc)"
+            >
+              Comprar paquete
+            </AppButton>
+            <AppButton
+              v-else-if="svc.type === 'package' && !auth.isLoggedIn"
+              variant="outline"
+              size="sm"
+              class="mt-4 w-full"
+              as="RouterLink"
+              :to="{ name: 'login', query: { redirect: route.fullPath } }"
+            >
+              Iniciá sesión para comprar
+            </AppButton>
         </AppCard>
       </div>
 

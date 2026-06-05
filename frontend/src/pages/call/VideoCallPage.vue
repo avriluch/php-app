@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Room, RoomEvent, Track } from 'livekit-client'
+import { Room, RoomEvent, Track, DisconnectReason } from 'livekit-client'
 import { Mic, MicOff, Video, VideoOff, PhoneOff } from '@lucide/vue'
 import api from '@/services/api'
 import AppSpinner from '@/components/ui/AppSpinner.vue'
@@ -15,6 +15,9 @@ const bookingId = route.params.bookingId
 
 const loading = ref(true)
 const error = ref(null)
+const enLlamada = ref(false)
+/** Aviso cuando se entra sin cámara (PC de escritorio, etc.). */
+const avisoSinCamara = ref(null)
 
 const audioEnabled = ref(true)
 const videoEnabled = ref(true)
@@ -22,12 +25,44 @@ const videoEnabled = ref(true)
 const localVideoTrack = ref(null)
 const localVideoEl = ref(null)
 
-// [{ identity, name, videoTrack }]
 const remoteParticipants = ref([])
-// hidden <audio> elements keyed by identity
 const audioEls = {}
 
-const room = new Room()
+let room = null
+let salirVoluntario = false
+/** Evita mostrar error genérico al cortar nosotros tras fallo de cámara/API. */
+let limpiandoSesion = false
+
+function mensajeDeError(e, fallback) {
+  const data = e?.response?.data
+  if (typeof data?.message === 'string' && data.message) return data.message
+  if (typeof e?.message === 'string' && e.message && e.message !== 'Network Error') {
+    return e.message
+  }
+  return fallback
+}
+
+function textoDesconexion(reason) {
+  switch (reason) {
+    case DisconnectReason.DUPLICATE_IDENTITY:
+      return 'Ya hay otra pestaña o sesión conectada con tu usuario. Cerrá otras ventanas de la videollamada e intentá de nuevo.'
+    case DisconnectReason.JOIN_FAILURE:
+      return 'LiveKit rechazó la conexión. Verificá LIVEKIT_URL, LIVEKIT_API_KEY y LIVEKIT_API_SECRET en backend/.env (mismo proyecto en cloud.livekit.io).'
+    case DisconnectReason.SIGNAL_CLOSE:
+    case DisconnectReason.STATE_MISMATCH:
+      return 'Se cortó la señal con LiveKit. Revisá tu red o que el proyecto LiveKit Cloud siga activo.'
+    case DisconnectReason.MEDIA_FAILURE:
+      return 'Falló el audio o video (cámara/micrófono). Probá otro navegador o permití permisos de dispositivo.'
+    case DisconnectReason.CONNECTION_TIMEOUT:
+      return 'Tiempo de espera agotado al conectar con LiveKit.'
+    case DisconnectReason.CLIENT_INITIATED:
+      return null
+    default:
+      return reason != null
+        ? `LiveKit desconectó la sesión (código ${reason}). Revisá credenciales y permisos de cámara.`
+        : 'Se perdió la conexión con LiveKit. Revisá credenciales LIVEKIT_* en backend/.env y permisos de cámara.'
+  }
+}
 
 function getOrCreateRemote(participant) {
   let entry = remoteParticipants.value.find(p => p.identity === participant.identity)
@@ -36,7 +71,11 @@ function getOrCreateRemote(participant) {
     audioEl.autoplay = true
     document.body.appendChild(audioEl)
     audioEls[participant.identity] = audioEl
-    entry = { identity: participant.identity, name: participant.name || participant.identity, videoTrack: null }
+    entry = {
+      identity: participant.identity,
+      name: participant.name || participant.identity,
+      videoTrack: null,
+    }
     remoteParticipants.value = [...remoteParticipants.value, entry]
   }
   return entry
@@ -48,62 +87,161 @@ function removeRemote(identity) {
   remoteParticipants.value = remoteParticipants.value.filter(p => p.identity !== identity)
 }
 
+async function attachLocalVideo() {
+  await nextTick()
+  const camPub = room?.localParticipant?.getTrackPublication(Track.Source.Camera)
+  if (camPub?.track && localVideoEl.value) {
+    localVideoTrack.value = camPub.track
+    camPub.track.attach(localVideoEl.value)
+  }
+}
+
+function registrarEventosRoom(targetRoom) {
+  targetRoom
+    .on(RoomEvent.TrackSubscribed, (track, _pub, participant) => {
+      const entry = getOrCreateRemote(participant)
+      if (track.kind === Track.Kind.Video) {
+        entry.videoTrack = track
+        remoteParticipants.value = [...remoteParticipants.value]
+      } else if (track.kind === Track.Kind.Audio) {
+        track.attach(audioEls[participant.identity])
+      }
+    })
+    .on(RoomEvent.TrackUnsubscribed, (track, _pub, participant) => {
+      const entry = remoteParticipants.value.find(p => p.identity === participant.identity)
+      if (entry && track.kind === Track.Kind.Video) {
+        entry.videoTrack = null
+        remoteParticipants.value = [...remoteParticipants.value]
+      }
+      track.detach()
+    })
+    .on(RoomEvent.ParticipantConnected, (participant) => {
+      getOrCreateRemote(participant)
+    })
+    .on(RoomEvent.ParticipantDisconnected, (participant) => {
+      removeRemote(participant.identity)
+    })
+    .on(RoomEvent.Disconnected, (reason) => {
+      if (salirVoluntario || limpiandoSesion) return
+      enLlamada.value = false
+      loading.value = false
+      if (error.value) return
+      const msg = textoDesconexion(reason)
+      if (msg) error.value = msg
+    })
+}
+
+async function desconectarLimpio() {
+  if (!room) return
+  limpiandoSesion = true
+  try {
+    await room.disconnect()
+  } catch {
+    /* ignorar */
+  } finally {
+    limpiandoSesion = false
+  }
+}
+
+function esErrorDispositivoNoEncontrado(e) {
+  const nombre = e?.name ?? ''
+  const msg = (e?.message ?? '').toLowerCase()
+  return (
+    nombre === 'NotFoundError'
+    || nombre === 'DevicesNotFoundError'
+    || msg.includes('not found')
+    || msg.includes('requested device')
+  )
+}
+
+async function activarDispositivos() {
+  try {
+    await room.localParticipant.setMicrophoneEnabled(true)
+    await room.localParticipant.setCameraEnabled(true)
+    await attachLocalVideo()
+    return
+  } catch (e) {
+    if (!esErrorDispositivoNoEncontrado(e)) throw e
+  }
+
+  // Sin cámara: intentar solo micrófono
+  try {
+    videoEnabled.value = false
+    await room.localParticipant.setCameraEnabled(false)
+    await room.localParticipant.setMicrophoneEnabled(true)
+    avisoSinCamara.value =
+      'No se detectó cámara en este equipo. Entraste solo con micrófono. Para probar video, usá una laptop o celular.'
+    return
+  } catch {
+    /* sin micrófono tampoco */
+  }
+
+  // Sin cámara ni micrófono: igual entrar para ver/escuchar al otro
+  videoEnabled.value = false
+  audioEnabled.value = false
+  await room.localParticipant.setCameraEnabled(false)
+  await room.localParticipant.setMicrophoneEnabled(false)
+  avisoSinCamara.value =
+    'Este equipo no tiene cámara ni micrófono. Podés permanecer en la sala y ver al otro cuando se conecte. Para una prueba completa, usá una laptop.'
+}
+
 onMounted(async () => {
+  room = new Room()
+  registrarEventosRoom(room)
+
   try {
     const { data } = await api.get(`/bookings/${bookingId}/livekit-token`)
 
-    room
-      .on(RoomEvent.TrackSubscribed, (track, _pub, participant) => {
-        const entry = getOrCreateRemote(participant)
-        if (track.kind === Track.Kind.Video) {
-          entry.videoTrack = track
-          remoteParticipants.value = [...remoteParticipants.value]
-        } else if (track.kind === Track.Kind.Audio) {
-          track.attach(audioEls[participant.identity])
-        }
-      })
-      .on(RoomEvent.TrackUnsubscribed, (track, _pub, participant) => {
-        const entry = remoteParticipants.value.find(p => p.identity === participant.identity)
-        if (entry && track.kind === Track.Kind.Video) {
-          entry.videoTrack = null
-          remoteParticipants.value = [...remoteParticipants.value]
-        }
-        track.detach()
-      })
-      .on(RoomEvent.ParticipantConnected, (participant) => {
-        getOrCreateRemote(participant)
-      })
-      .on(RoomEvent.ParticipantDisconnected, (participant) => {
-        removeRemote(participant.identity)
-      })
-      .on(RoomEvent.Disconnected, () => {
-        router.back()
-      })
+    if (!data?.url || !data?.token) {
+      error.value =
+        'El servidor no devolvió credenciales de LiveKit. Reiniciá php artisan serve después de editar backend/.env.'
+      return
+    }
 
-    await room.connect(data.url, data.token)
+    try {
+      await room.connect(data.url, data.token)
+    } catch (e) {
+      error.value = `No se pudo conectar a LiveKit: ${mensajeDeError(e, 'revisá LIVEKIT_URL en backend/.env')}`
+      return
+    }
 
-    // Participants already in the room
     room.remoteParticipants.forEach((p) => {
       const entry = getOrCreateRemote(p)
       p.videoTrackPublications.forEach((pub) => {
-        if (pub.track) { entry.videoTrack = pub.track }
+        if (pub.track) entry.videoTrack = pub.track
       })
       p.audioTrackPublications.forEach((pub) => {
         if (pub.track) pub.track.attach(audioEls[p.identity])
       })
     })
 
-    await room.localParticipant.enableCameraAndMicrophone()
-    await nextTick()
-
-    const camPub = room.localParticipant.getTrackPublication(Track.Source.Camera)
-    if (camPub?.track) {
-      localVideoTrack.value = camPub.track
-      if (localVideoEl.value) camPub.track.attach(localVideoEl.value)
+    try {
+      await activarDispositivos()
+    } catch (e) {
+      const nombre = e?.name ?? ''
+      if (nombre === 'NotAllowedError' || nombre === 'PermissionDeniedError') {
+        error.value =
+          'El navegador bloqueó la cámara o el micrófono. Hacé clic en el candado de la barra de direcciones → Permitir cámara y micrófono → recargá.'
+      } else {
+        error.value = `No se pudo activar cámara/micrófono: ${mensajeDeError(e, 'dispositivo no disponible')}`
+      }
+      await desconectarLimpio()
+      return
     }
 
+    enLlamada.value = true
   } catch (e) {
-    error.value = e.response?.data?.message || 'No se pudo conectar a la videollamada.'
+    const status = e?.response?.status
+    if (status === 422) {
+      error.value =
+        mensajeDeError(e, 'No se puede iniciar la videollamada.') +
+        ' Asegurate de: (1) reserva en estado «en curso», (2) modalidad virtual o híbrida, (3) haber pulsado «Iniciar sesión» antes de «Unirse».'
+    } else if (status === 403) {
+      error.value = mensajeDeError(e, 'No tenés permiso para esta videollamada.')
+    } else {
+      error.value = mensajeDeError(e, 'No se pudo conectar a la videollamada.')
+    }
+    await desconectarLimpio()
   } finally {
     loading.value = false
   }
@@ -111,31 +249,33 @@ onMounted(async () => {
 
 onUnmounted(() => {
   Object.values(audioEls).forEach(el => el.remove())
-  room.disconnect()
+  salirVoluntario = true
+  limpiandoSesion = true
+  room?.disconnect().catch(() => {})
+  room = null
 })
 
 const toggleAudio = async () => {
+  if (!room?.localParticipant) return
   audioEnabled.value = !audioEnabled.value
   await room.localParticipant.setMicrophoneEnabled(audioEnabled.value)
 }
 
 const toggleVideo = async () => {
+  if (!room?.localParticipant) return
   videoEnabled.value = !videoEnabled.value
   await room.localParticipant.setCameraEnabled(videoEnabled.value)
   if (videoEnabled.value) {
-    await nextTick()
-    const camPub = room.localParticipant.getTrackPublication(Track.Source.Camera)
-    if (camPub?.track && localVideoEl.value) {
-      localVideoTrack.value = camPub.track
-      camPub.track.attach(localVideoEl.value)
-    }
+    await attachLocalVideo()
   } else {
     localVideoTrack.value = null
   }
 }
 
 const hangUp = async () => {
-  await room.disconnect()
+  salirVoluntario = true
+  enLlamada.value = false
+  await desconectarLimpio()
   router.back()
 }
 </script>
@@ -143,15 +283,13 @@ const hangUp = async () => {
 <template>
   <div class="h-screen bg-neutral-900 flex flex-col">
 
-    <!-- Loading -->
     <div v-if="loading" class="flex-1 flex flex-col items-center justify-center gap-3 text-white">
       <AppSpinner size="lg" class="text-primary-400" />
       <p class="text-neutral-400 text-sm">Conectando a la sesión...</p>
     </div>
 
-    <!-- Error -->
-    <div v-else-if="error" class="flex-1 flex flex-col items-center justify-center gap-4 text-white p-8">
-      <p class="text-red-400 text-center">{{ error }}</p>
+    <div v-else-if="error" class="flex-1 flex flex-col items-center justify-center gap-4 text-white p-8 max-w-lg mx-auto">
+      <p class="text-red-400 text-center text-sm leading-relaxed">{{ error }}</p>
       <button
         class="px-5 py-2 bg-primary-600 hover:bg-primary-700 rounded-lg text-sm font-medium transition-colors cursor-pointer"
         @click="router.back()"
@@ -160,12 +298,16 @@ const hangUp = async () => {
       </button>
     </div>
 
-    <!-- Call UI -->
-    <template v-else>
-      <!-- Tiles area -->
-      <div class="flex-1 p-4 overflow-hidden">
+    <template v-else-if="enLlamada">
+      <div
+        v-if="avisoSinCamara"
+        class="shrink-0 px-4 py-2 bg-amber-500/20 border-b border-amber-500/40 text-amber-100 text-sm text-center"
+      >
+        {{ avisoSinCamara }}
+      </div>
 
-        <!-- Waiting for other participant -->
+      <div class="flex-1 p-4 overflow-hidden relative">
+
         <div
           v-if="remoteParticipants.length === 0"
           class="h-full flex flex-col items-center justify-center gap-3 text-neutral-400"
@@ -175,7 +317,6 @@ const hangUp = async () => {
           </div>
           <p class="text-sm">Esperando al otro participante...</p>
 
-          <!-- Self preview centered while alone -->
           <div class="mt-4 w-64 h-40 rounded-xl overflow-hidden bg-neutral-800">
             <video
               ref="localVideoEl"
@@ -187,7 +328,6 @@ const hangUp = async () => {
           </div>
         </div>
 
-        <!-- Grid cuando hay participantes -->
         <div v-else class="h-full grid gap-3" :class="remoteParticipants.length === 1 ? 'grid-cols-1' : 'grid-cols-2'">
           <VideoTile
             v-for="p in remoteParticipants"
@@ -198,7 +338,6 @@ const hangUp = async () => {
           />
         </div>
 
-        <!-- Local pip (esquina) cuando hay remotos -->
         <div
           v-if="remoteParticipants.length > 0"
           class="absolute bottom-24 right-4 w-36 h-24 sm:w-44 sm:h-28 rounded-xl overflow-hidden bg-neutral-800 border-2 border-neutral-700 shadow-xl"
@@ -219,12 +358,11 @@ const hangUp = async () => {
         </div>
       </div>
 
-      <!-- Control bar -->
       <div class="h-20 bg-neutral-800 border-t border-neutral-700 flex items-center justify-center gap-4 px-6 shrink-0">
         <button
           :class="[
             'w-12 h-12 rounded-full flex items-center justify-center transition-colors cursor-pointer',
-            audioEnabled ? 'bg-neutral-700 hover:bg-neutral-600 text-white' : 'bg-red-600 hover:bg-red-500 text-white'
+            audioEnabled ? 'bg-neutral-700 hover:bg-neutral-600 text-white' : 'bg-red-600 hover:bg-red-500 text-white',
           ]"
           :title="audioEnabled ? 'Silenciar' : 'Activar micrófono'"
           @click="toggleAudio"
@@ -236,7 +374,7 @@ const hangUp = async () => {
         <button
           :class="[
             'w-12 h-12 rounded-full flex items-center justify-center transition-colors cursor-pointer',
-            videoEnabled ? 'bg-neutral-700 hover:bg-neutral-600 text-white' : 'bg-red-600 hover:bg-red-500 text-white'
+            videoEnabled ? 'bg-neutral-700 hover:bg-neutral-600 text-white' : 'bg-red-600 hover:bg-red-500 text-white',
           ]"
           :title="videoEnabled ? 'Apagar cámara' : 'Activar cámara'"
           @click="toggleVideo"

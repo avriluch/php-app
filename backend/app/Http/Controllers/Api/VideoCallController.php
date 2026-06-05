@@ -17,6 +17,16 @@ class VideoCallController extends Controller
 {
     public function token(Request $request, int $id): JsonResponse
     {
+        $url = trim((string) config('services.livekit.url'));
+        $apiKey = trim((string) config('services.livekit.api_key'));
+        $apiSecret = trim((string) config('services.livekit.api_secret'));
+
+        if (! $url || ! $apiKey || ! $apiSecret) {
+            return response()->json([
+                'message' => 'LiveKit no está configurado en el servidor. Revisá LIVEKIT_URL, LIVEKIT_API_KEY y LIVEKIT_API_SECRET en backend/.env y ejecutá php artisan config:clear.',
+            ], 503);
+        }
+
         $reserva = Booking::with(['professionalProfile'])->findOrFail($id);
         $usuario = $request->user();
 
@@ -44,7 +54,8 @@ class VideoCallController extends Controller
 
         $tokenOptions = (new AccessTokenOptions())
             ->setIdentity("user-{$usuario->id}")
-            ->setName($nombre);
+            ->setName($nombre)
+            ->setTtl(60 * 60);
 
         $videoGrant = (new VideoGrant())
             ->setRoomJoin(true)
@@ -52,18 +63,23 @@ class VideoCallController extends Controller
             ->setCanPublish(true)
             ->setCanSubscribe(true);
 
-        $token = (new AccessToken(
-            config('services.livekit.api_key'),
-            config('services.livekit.api_secret'),
-        ))
-            ->init($tokenOptions)
-            ->setGrant($videoGrant)
-            ->toJwt();
+        try {
+            $token = (new AccessToken($apiKey, $apiSecret))
+                ->init($tokenOptions)
+                ->setGrant($videoGrant)
+                ->toJwt();
+        } catch (\Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'message' => 'No se pudo generar el token de videollamada. Verificá las credenciales de LiveKit en backend/.env.',
+            ], 500);
+        }
 
         return response()->json([
             'token' => $token,
-            'url'   => config('services.livekit.url'),
-            'room'  => $roomName,
+            'url' => $url,
+            'room' => $roomName,
         ]);
     }
 }

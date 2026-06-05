@@ -40,10 +40,41 @@ const nextStep = () => {
   if (validateStep1()) step.value = 2
 }
 
+function limpiarErroresApi() {
+  errors.name = ''
+  errors.email = ''
+  errors.password = ''
+  errors.password_confirmation = ''
+  errors.general = ''
+}
+
+function aplicarErroresApi(apiErrors) {
+  if (!apiErrors || typeof apiErrors !== 'object') return
+
+  const primero = (clave) => {
+    const msg = apiErrors[clave]
+    return Array.isArray(msg) ? msg[0] : msg
+  }
+
+  if (primero('nombre') || primero('apellido')) {
+    errors.name = primero('nombre') || primero('apellido')
+  }
+  if (primero('email')) errors.email = primero('email')
+  if (primero('password')) errors.password = primero('password')
+  if (primero('password_confirmation')) errors.password_confirmation = primero('password_confirmation')
+  if (primero('role')) errors.role = primero('role')
+
+  // Evitar duplicar el mismo texto bajo el campo y en "general"
+  const todos = Object.values(apiErrors).flat().filter(Boolean)
+  const yaMostradoEnCampo =
+    errors.email || errors.name || errors.password || errors.password_confirmation || errors.role
+  if (todos.length && !yaMostradoEnCampo) errors.general = todos[0]
+}
+
 const handleSubmit = async () => {
   if (!validateStep2()) return
   loading.value = true
-  errors.general = ''
+  limpiarErroresApi()
   try {
     await auth.register(form)
     if (form.role === 'professional') {
@@ -52,7 +83,11 @@ const handleSubmit = async () => {
       router.push('/dashboard/client')
     }
   } catch (e) {
-    errors.general = e.response?.data?.message ?? 'Error al registrarse. Intentá de nuevo.'
+    if (e.response?.status === 422 && e.response?.data?.errors) {
+      aplicarErroresApi(e.response.data.errors)
+    } else {
+      errors.general = e.response?.data?.message ?? 'Error al registrarse. Intentá de nuevo.'
+    }
   } finally {
     loading.value = false
   }
@@ -168,6 +203,13 @@ const oauthLogin = (provider) => {
         />
 
         <p v-if="errors.general" class="text-sm text-red-600 text-center">{{ errors.general }}</p>
+        <p
+          v-if="errors.email && errors.email.includes('Google')"
+          class="text-xs text-neutral-500 text-center -mt-2"
+        >
+          <RouterLink to="/auth/login" class="text-primary-600 font-medium">Ir al login</RouterLink>
+          y usá el botón «Continuar con Google».
+        </p>
 
         <AppButton type="submit" variant="primary" size="lg" class="w-full" :loading="loading">
           Crear cuenta

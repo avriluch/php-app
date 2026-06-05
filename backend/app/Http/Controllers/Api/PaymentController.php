@@ -7,6 +7,7 @@ use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Payment;
+use App\Models\User;
 use App\Services\PayPalService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -19,16 +20,37 @@ class PaymentController extends Controller
     {
     }
 
+    private function autorizarPagoCliente(Payment $payment, User $usuario): void
+    {
+        if ($payment->booking) {
+            abort_unless(
+                (int) $payment->booking->client_user_id === (int) $usuario->id,
+                403,
+                'No autorizado.',
+            );
+
+            return;
+        }
+
+        if ($payment->packagePurchase) {
+            abort_unless(
+                (int) $payment->packagePurchase->client_user_id === (int) $usuario->id,
+                403,
+                'No autorizado.',
+            );
+
+            return;
+        }
+
+        abort(403, 'No autorizado.');
+    }
+
     public function createPayPalOrder(Request $request, int $paymentId): JsonResponse
     {
-        $payment = Payment::with('booking.client')->findOrFail($paymentId);
+        $payment = Payment::with(['booking.client', 'packagePurchase'])->findOrFail($paymentId);
 
         $usuario = $request->user();
-        abort_unless(
-            (int) $payment->booking?->client_user_id === (int) $usuario->id,
-            403,
-            'No autorizado.'
-        );
+        $this->autorizarPagoCliente($payment, $usuario);
 
         abort_unless(
             $payment->estado === PaymentStatus::Pendiente,
@@ -58,14 +80,10 @@ class PaymentController extends Controller
             'order_id' => ['required', 'string'],
         ]);
 
-        $payment = Payment::with(['booking', 'booking.client'])->findOrFail($paymentId);
+        $payment = Payment::with(['booking', 'booking.client', 'packagePurchase'])->findOrFail($paymentId);
 
         $usuario = $request->user();
-        abort_unless(
-            (int) $payment->booking?->client_user_id === (int) $usuario->id,
-            403,
-            'No autorizado.'
-        );
+        $this->autorizarPagoCliente($payment, $usuario);
 
         abort_unless(
             $payment->estado === PaymentStatus::Pendiente,

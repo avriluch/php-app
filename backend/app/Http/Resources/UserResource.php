@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Support\ProfilePhotoUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -15,7 +16,7 @@ class UserResource extends JsonResource
             'apellido' => $this->apellido,
             'email' => $this->email,
             'telefono' => $this->telefono,
-            'foto_perfil' => $this->foto_perfil,
+            'foto_perfil' => ProfilePhotoUrl::resolve($this->foto_perfil),
             'role' => $this->role->value,
             'professional_profile_id' => $this->when(
                 $this->relationLoaded('professionalProfile'),

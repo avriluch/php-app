@@ -1,11 +1,14 @@
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
+import { resolveMediaUrl } from '@/utils/media'
 
 const props = defineProps({
   src: String,
   name: { type: String, default: '' },
   size: { type: String, default: 'md' },
 })
+
+const resolvedSrc = computed(() => resolveMediaUrl(props.src))
 
 const sizes = {
   xs: 'w-6 h-6 text-xs',
@@ -40,13 +43,14 @@ const colorIndex = (name) => {
 
 const imgError = ref(false)
 watch(() => props.src, () => { imgError.value = false })
+watch(resolvedSrc, () => { imgError.value = false })
 </script>
 
 <template>
   <span :class="['inline-flex items-center justify-center rounded-full font-semibold overflow-hidden shrink-0', sizes[size]]">
     <img
-      v-if="src && !imgError"
-      :src="src"
+      v-if="resolvedSrc && !imgError"
+      :src="resolvedSrc"
       :alt="name"
       class="w-full h-full object-cover"
       @error="imgError = true"

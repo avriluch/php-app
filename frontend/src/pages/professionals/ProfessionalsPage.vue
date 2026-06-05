@@ -1,6 +1,6 @@
 <script setup>
 import { ref, reactive, watch, onMounted, computed } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import { Search, SlidersHorizontal, Star, MapPin, X, ChevronDown } from '@lucide/vue'
 import api from '@/services/api'
 import AppButton from '@/components/ui/AppButton.vue'
@@ -15,6 +15,7 @@ const professionals = ref([])
 const meta = ref(null)
 const filtersOpen = ref(false)
 
+const route = useRoute()
 const search = ref('')
 
 const filters = reactive({
@@ -78,7 +79,16 @@ function debouncedFetch() {
 watch(search, debouncedFetch)
 watch(filters, fetchProfessionals)
 
-onMounted(fetchProfessionals)
+onMounted(() => {
+  if (route.query.type === 'package' || route.query.type === 'session') {
+    filters.type = route.query.type
+  }
+  const q = route.query.search ?? route.query.q
+  if (typeof q === 'string' && q.trim()) {
+    search.value = q.trim()
+  }
+  fetchProfessionals()
+})
 
 function fullName(p) { return `${p.nombre} ${p.apellido}`.trim() }
 function modalidadLabel(m) {

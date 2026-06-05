@@ -71,9 +71,7 @@ class ProfessionalController extends Controller
         // Orden: rating (default) o price (precio del servicio más barato).
         $sort = $request->string('sort', 'rating')->toString();
         if ($sort === 'price') {
-            $query
-                ->withMin(['services as precio_min_service' => fn ($q) => $q->where('activo', true)], 'precio')
-                ->orderBy('precio_min_service');
+            $query->orderBy('precio_desde');
         } else {
             $query->orderByDesc('reviews_avg_puntaje');
         }
@@ -165,6 +163,7 @@ class ProfessionalController extends Controller
             ->with(['user', 'location'])
             ->withAvg('reviews', 'puntaje')
             ->withCount('reviews')
+            ->withMin(['services as precio_desde' => fn (Builder $q) => $q->where('activo', true)], 'precio')
             ->whereHas('user')
             ->whereHas('services', fn (Builder $q) => $q->where('activo', true));
     }

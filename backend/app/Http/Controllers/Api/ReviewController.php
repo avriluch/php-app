@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Enums\BookingStatus;
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
+use App\Support\ProfilePhotoUrl;
 use App\Models\Booking;
 use App\Models\Review;
 use Carbon\Carbon;
@@ -35,7 +36,7 @@ class ReviewController extends Controller
                 'cliente' => $r->client ? [
                     'nombre' => $r->client->nombre,
                     'apellido' => $r->client->apellido,
-                    'foto_perfil' => $r->client->foto_perfil,
+                    'foto_perfil' => ProfilePhotoUrl::resolve($r->client->foto_perfil),
                 ] : null,
             ])->all(),
             'meta' => [
@@ -106,7 +107,7 @@ class ReviewController extends Controller
                 'cliente' => $r->client ? [
                     'nombre' => $r->client->nombre,
                     'apellido' => $r->client->apellido,
-                    'foto_perfil' => $r->client->foto_perfil,
+                    'foto_perfil' => ProfilePhotoUrl::resolve($r->client->foto_perfil),
                 ] : null,
             ])->all(),
             'meta' => [
