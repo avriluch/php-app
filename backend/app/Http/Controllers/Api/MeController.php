@@ -115,10 +115,24 @@ class MeController extends Controller
         $calificacion = (clone $resenas)->avg('puntaje');
         $calificacionTotal = (clone $resenas)->count();
 
+        $reservasPorEstadoMes = Booking::where('professional_profile_id', $perfil->id)
+            ->whereBetween('fecha_hora', [$inicioMes, $finMes])
+            ->selectRaw('estado, COUNT(*) as total')
+            ->groupBy('estado')
+            ->pluck('total', 'estado')
+            ->all();
+
+        $ingresosTotal = Payment::query()
+            ->whereHas('booking', fn ($q) => $q->where('professional_profile_id', $perfil->id))
+            ->where('estado', PaymentStatus::Completado->value)
+            ->sum('monto');
+
         return [
             'turnos_hoy' => $turnosHoy,
             'reservas_mes' => $reservasMes,
             'ingresos_mes' => (float) $ingresosMes,
+            'ingresos_total' => (float) $ingresosTotal,
+            'reservas_por_estado_mes' => $reservasPorEstadoMes,
             'calificacion' => $calificacion !== null ? round((float) $calificacion, 2) : null,
             'calificacion_total' => $calificacionTotal,
         ];

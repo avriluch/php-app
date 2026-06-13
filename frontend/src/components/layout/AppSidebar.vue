@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import {
   LayoutDashboard, Calendar, Users, Settings, Star, CreditCard,
-  Briefcase, BarChart2, ShieldCheck, Bell, X,
+  Briefcase, Bell, X,
 } from '@lucide/vue'
 import AppAvatar from '@/components/ui/AppAvatar.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -21,7 +21,6 @@ const navByRole = {
     { label: 'Mis reseñas', to: '/dashboard/client/reviews', icon: Star },
     { label: 'Pagos', to: '/dashboard/client/payments', icon: CreditCard },
     { label: 'Notificaciones', to: '/dashboard/notifications', icon: Bell },
-    { label: 'Configuración', to: '/dashboard/client/settings', icon: Settings },
   ],
   professional: [
     { label: 'Panel', to: '/dashboard/professional', icon: LayoutDashboard },
@@ -31,23 +30,27 @@ const navByRole = {
     { label: 'Servicios', to: '/dashboard/professional/services', icon: Briefcase },
     { label: 'Paquetes', to: '/dashboard/professional/packages', icon: Briefcase },
     { label: 'Reseñas', to: '/dashboard/professional/reviews', icon: Star },
-    { label: 'Métricas', to: '/dashboard/professional/metrics', icon: BarChart2 },
     { label: 'Notificaciones', to: '/dashboard/notifications', icon: Bell },
     { label: 'Configuración', to: '/dashboard/professional/settings', icon: Settings },
   ],
   admin: [
     { label: 'Panel', to: '/admin', icon: LayoutDashboard },
     { label: 'Usuarios', to: '/admin/users', icon: Users },
-    { label: 'Profesionales', to: '/admin/professionals', icon: ShieldCheck },
-    { label: 'Métricas', to: '/admin/metrics', icon: BarChart2 },
-    { label: 'Notificaciones', to: '/dashboard/notifications', icon: Bell },
-    { label: 'Configuración', to: '/admin/settings', icon: Settings },
   ],
 }
 
 const links = computed(() => navByRole[auth.role] ?? [])
 
-const isActive = (to) => route.path === to || route.path.startsWith(to + '/')
+// Un link está activo solo si es la coincidencia MÁS específica para la ruta actual.
+// Evita que "Panel" (cuyo path es prefijo de todas las sub-rutas) quede siempre marcado.
+const isActive = (to) => {
+  const coincidencias = links.value
+    .map((l) => l.to)
+    .filter((t) => route.path === t || route.path.startsWith(t + '/'))
+  if (coincidencias.length === 0) return false
+  const masEspecifico = coincidencias.reduce((a, b) => (b.length > a.length ? b : a))
+  return to === masEspecifico
+}
 </script>
 
 <template>

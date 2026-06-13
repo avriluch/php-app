@@ -20,6 +20,48 @@ class PaymentController extends Controller
     {
     }
 
+    /**
+     * Historial de pagos del cliente autenticado (reservas + paquetes).
+     */
+    public function index(Request $request): JsonResponse
+    {
+        $usuario = $request->user();
+
+        $pagos = Payment::query()
+            ->with(['booking.service', 'packagePurchase.service'])
+            ->where(function ($q) use ($usuario) {
+                $q->whereHas('booking', fn ($b) => $b->where('client_user_id', $usuario->id))
+                    ->orWhereHas('packagePurchase', fn ($p) => $p->where('client_user_id', $usuario->id));
+            })
+            ->orderByDesc('created_at')
+            ->paginate(min((int) $request->input('per_page', 20), 100));
+
+        return response()->json([
+            'data' => $pagos->getCollection()->map(fn (Payment $p) => [
+                'id' => $p->id,
+                'monto' => (float) $p->monto,
+                'estado' => $p->estado->value,
+                'metodo' => $p->metodo?->value,
+                'fecha_pago' => $p->fecha_pago?->toIso8601String(),
+                'created_at' => $p->created_at?->toIso8601String(),
+                'referencia_pasarela' => $p->referencia_pasarela,
+                'tipo' => $p->booking_id ? 'reserva' : 'paquete',
+                'concepto' => $p->booking
+                    ? ('Reserva · ' . ($p->booking->service?->nombre ?? 'Servicio'))
+                    : ($p->packagePurchase
+                        ? ('Paquete · ' . ($p->packagePurchase->service?->nombre ?? 'Paquete'))
+                        : 'Pago'),
+                'booking_id' => $p->booking_id,
+                'package_purchase_id' => $p->package_purchase_id,
+            ])->all(),
+            'meta' => [
+                'current_page' => $pagos->currentPage(),
+                'last_page' => $pagos->lastPage(),
+                'total' => $pagos->total(),
+            ],
+        ]);
+    }
+
     private function autorizarPagoCliente(Payment $payment, User $usuario): void
     {
         if ($payment->booking) {

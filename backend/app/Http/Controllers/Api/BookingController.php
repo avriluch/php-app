@@ -15,6 +15,7 @@ use App\Jobs\EnviarReagendacionReserva;
 use App\Models\Booking;
 use App\Models\PackagePurchase;
 use App\Models\Payment;
+use App\Models\ProfessionalProfile;
 use App\Models\Service;
 use App\Services\AvailabilityService;
 use Carbon\Carbon;
@@ -101,6 +102,12 @@ class BookingController extends Controller
         $fechaHora = Carbon::parse($datos['fecha_hora']);
 
         return DB::transaction(function () use ($datos, $fechaHora, $usuario) {
+            // Lock pesimista sobre el profesional: serializa TODAS sus reservas, de modo que
+            // dos clientes no puedan tomar el mismo horario en paralelo (aunque sea con
+            // servicios distintos). Debe ir antes del lock del servicio para mantener un
+            // orden de bloqueo consistente y evitar deadlocks.
+            ProfessionalProfile::lockForUpdate()->findOrFail($datos['professional_id']);
+
             $servicio = Service::lockForUpdate()->findOrFail($datos['service_id']);
 
             abort_unless(
@@ -272,6 +279,10 @@ class BookingController extends Controller
         }
 
         DB::transaction(function () use ($reserva, $nuevaFecha) {
+            // Mismo lock pesimista por profesional que en store(), para que reprogramar
+            // no choque con otra reserva o reprogramación simultánea en el mismo horario.
+            ProfessionalProfile::lockForUpdate()->findOrFail($reserva->professional_profile_id);
+
             if (! $this->disponibilidad->isSlotFree(
                 (int) $reserva->professional_profile_id,
                 $nuevaFecha,

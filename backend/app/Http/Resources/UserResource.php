@@ -18,6 +18,7 @@ class UserResource extends JsonResource
             'telefono' => $this->telefono,
             'foto_perfil' => ProfilePhotoUrl::resolve($this->foto_perfil),
             'role' => $this->role->value,
+            'activo' => (bool) $this->activo,
             'professional_profile_id' => $this->when(
                 $this->relationLoaded('professionalProfile'),
                 fn () => $this->professionalProfile?->id,

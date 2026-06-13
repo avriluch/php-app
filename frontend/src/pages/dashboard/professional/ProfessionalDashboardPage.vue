@@ -1,12 +1,11 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Calendar, BarChart2, Star, Clock, ChevronRight, MapPin, Video, Play } from '@lucide/vue'
+import { Calendar, BarChart2, Star, Clock, ChevronRight, Video, Play } from '@lucide/vue'
 import api from '@/services/api'
 import AppCard from '@/components/ui/AppCard.vue'
 import AppSpinner from '@/components/ui/AppSpinner.vue'
 import AppBadge from '@/components/ui/AppBadge.vue'
-import StarRating from '@/components/ui/StarRating.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -23,6 +22,26 @@ const stats = ref([
 
 const ratingTotal = ref(0)
 const turnosHoy = ref([])
+const porEstado = ref({})
+
+const statusMeta = {
+  pendiente: { label: 'Pendiente', variant: 'warning' },
+  confirmada: { label: 'Confirmada', variant: 'info' },
+  pagada: { label: 'Pagada', variant: 'paid' },
+  en_curso: { label: 'En curso', variant: 'primary' },
+  finalizada: { label: 'Finalizada', variant: 'success' },
+  cancelada: { label: 'Cancelada', variant: 'danger' },
+  no_asistida: { label: 'No asistió', variant: 'default' },
+}
+
+const bookingsByStatus = computed(() =>
+  Object.entries(porEstado.value).map(([estado, total]) => ({
+    estado,
+    total,
+    label: statusMeta[estado]?.label ?? estado,
+    variant: statusMeta[estado]?.variant ?? 'default',
+  })),
+)
 
 const formatPrice = (n) =>
   new Intl.NumberFormat('es-UY', { style: 'currency', currency: 'UYU', maximumFractionDigits: 0 }).format(n)
@@ -65,6 +84,7 @@ onMounted(async () => {
         }
       })
       ratingTotal.value = data.calificacion_total ?? 0
+      porEstado.value = data.reservas_por_estado_mes ?? {}
     }).catch(() => {}).finally(() => { statsLoading.value = false }),
 
     api.get('/bookings', { params: { from: desde, to: hasta, per_page: 10 } })
@@ -204,5 +224,26 @@ onMounted(async () => {
         </div>
       </AppCard>
     </div>
+
+    <!-- Reservas del mes por estado -->
+    <AppCard class="mt-6">
+      <h2 class="font-semibold text-neutral-900 mb-4">Reservas del mes por estado</h2>
+      <div v-if="statsLoading" class="flex justify-center py-6">
+        <AppSpinner size="md" />
+      </div>
+      <p v-else-if="bookingsByStatus.length === 0" class="text-sm text-neutral-500 py-4 text-center">
+        Todavía no hay reservas este mes.
+      </p>
+      <div v-else class="flex flex-wrap gap-2">
+        <div
+          v-for="s in bookingsByStatus"
+          :key="s.estado"
+          class="flex items-center gap-2 px-3 py-2 rounded-lg border border-neutral-100 bg-neutral-50/50"
+        >
+          <AppBadge :variant="s.variant" size="xs">{{ s.label }}</AppBadge>
+          <span class="font-semibold text-neutral-900 text-sm">{{ s.total }}</span>
+        </div>
+      </div>
+    </AppCard>
   </div>
 </template>

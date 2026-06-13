@@ -157,6 +157,50 @@ class ProfessionalController extends Controller
         ]);
     }
 
+    /**
+     * Perfil profesional del usuario autenticado (para la pantalla de Configuración).
+     */
+    public function myProfile(Request $request): JsonResponse
+    {
+        $perfil = $request->user()->professionalProfile;
+        abort_unless($perfil, 404, 'Perfil profesional no encontrado.');
+
+        return response()->json($this->formatOwnProfile($perfil));
+    }
+
+    /**
+     * Actualiza título, descripción y política de cancelación del profesional.
+     */
+    public function updateMyProfile(Request $request): JsonResponse
+    {
+        $perfil = $request->user()->professionalProfile;
+        abort_unless($perfil, 404, 'Perfil profesional no encontrado.');
+
+        $datos = $request->validate([
+            'titulo' => ['sometimes', 'string', 'max:120'],
+            'descripcion' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            'cancelacion_horas_minimas' => ['sometimes', 'integer', 'between:0,168'],
+        ]);
+
+        $perfil->fill($datos)->save();
+
+        return response()->json([
+            'message' => 'Perfil actualizado.',
+            'profile' => $this->formatOwnProfile($perfil),
+        ]);
+    }
+
+    /** @return array<string, mixed> */
+    private function formatOwnProfile(ProfessionalProfile $perfil): array
+    {
+        return [
+            'id' => $perfil->id,
+            'titulo' => $perfil->titulo,
+            'descripcion' => $perfil->descripcion,
+            'cancelacion_horas_minimas' => (int) $perfil->cancelacion_horas_minimas,
+        ];
+    }
+
     private function baseQuery(): Builder
     {
         return ProfessionalProfile::query()

@@ -11,6 +11,7 @@ use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
 /**
@@ -70,7 +71,13 @@ class EnviarConfirmacionReserva implements ShouldQueue
             Mail::to($profUser->email)->send(new ReservaCreadaMail($reserva, 'profesional'));
 
             // Transmite en vivo al canal privado del profesional (WebSocket vía Reverb).
-            NuevaReservaProfesional::dispatch($reserva);
+            // Best-effort: si Reverb no está disponible, no debe romper el job
+            // (los emails y notificaciones ya se enviaron; reintentarlo los duplicaría).
+            try {
+                NuevaReservaProfesional::dispatch($reserva);
+            } catch (\Throwable $e) {
+                Log::warning('No se pudo transmitir NuevaReservaProfesional: ' . $e->getMessage());
+            }
         }
     }
 }

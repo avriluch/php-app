@@ -78,15 +78,20 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/notifications/{id}/read', [NotificationController::class, 'markRead'])->whereNumber('id');
     Route::patch('/notifications/read-all', [NotificationController::class, 'markAllRead']);
 
-    // Paquetes (cliente)
+    // Paquetes + pagos (cliente)
     Route::middleware('role:client')->group(function () {
         Route::get('/package-purchases', [PackagePurchaseController::class, 'index']);
         Route::get('/package-purchases/{id}', [PackagePurchaseController::class, 'show'])->whereNumber('id');
         Route::post('/package-purchases', [PackagePurchaseController::class, 'store']);
+
+        Route::get('/payments', [PaymentController::class, 'index']);
     });
 
     // Profesional: agenda + CRUD servicios
     Route::prefix('professional')->middleware('role:professional')->group(function () {
+        Route::get('/profile', [ProfessionalController::class, 'myProfile']);
+        Route::put('/profile', [ProfessionalController::class, 'updateMyProfile']);
+
         Route::get('/agenda', [AgendaController::class, 'show']);
         Route::put('/agenda', [AgendaController::class, 'update']);
         Route::post('/agenda/exceptions', [AgendaController::class, 'storeException']);
@@ -107,6 +112,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Admin
     Route::prefix('admin')->middleware('role:admin')->group(function () {
         Route::get('/users', [AdminController::class, 'users']);
+        Route::patch('/users/{id}/role', [AdminController::class, 'updateUserRole'])->whereNumber('id');
+        Route::patch('/users/{id}/status', [AdminController::class, 'updateUserStatus'])->whereNumber('id');
         Route::get('/metrics', [AdminController::class, 'metrics']);
+        Route::get('/activity', [AdminController::class, 'activity']);
     });
 });

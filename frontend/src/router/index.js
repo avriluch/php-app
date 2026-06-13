@@ -113,14 +113,7 @@ const router = createRouter({
         {
           path: 'payments',
           name: 'client-payments',
-          component: placeholder,
-          meta: { pageTitle: 'Pagos', pageDescription: 'Historial de pagos de reservas y paquetes.' },
-        },
-        {
-          path: 'settings',
-          name: 'client-settings',
-          component: placeholder,
-          meta: { pageTitle: 'Configuración', pageDescription: 'Preferencias de tu cuenta.' },
+          component: () => import('@/pages/dashboard/client/ClientPaymentsPage.vue'),
         },
       ],
     },
@@ -178,16 +171,9 @@ const router = createRouter({
           meta: { pageTitle: 'Reseñas', pageDescription: 'Calificaciones de tus clientes.' },
         },
         {
-          path: 'metrics',
-          name: 'professional-metrics',
-          component: placeholder,
-          meta: { pageTitle: 'Métricas', pageDescription: 'Resumen de actividad y ingresos.' },
-        },
-        {
           path: 'settings',
           name: 'professional-settings',
-          component: placeholder,
-          meta: { pageTitle: 'Configuración', pageDescription: 'Perfil profesional y políticas.' },
+          component: () => import('@/pages/dashboard/professional/ProfessionalSettingsPage.vue'),
         },
       ],
     },
@@ -234,20 +220,7 @@ const router = createRouter({
         {
           path: 'users',
           name: 'admin-users',
-          component: placeholder,
-          meta: { pageTitle: 'Usuarios', pageDescription: 'Gestión de clientes y profesionales.' },
-        },
-        {
-          path: 'professionals',
-          name: 'admin-professionals',
-          component: placeholder,
-          meta: { pageTitle: 'Profesionales', pageDescription: 'Moderación de perfiles profesionales.' },
-        },
-        {
-          path: 'metrics',
-          name: 'admin-metrics',
-          component: placeholder,
-          meta: { pageTitle: 'Métricas', pageDescription: 'Uso general de la plataforma.' },
+          component: () => import('@/pages/admin/AdminUsersPage.vue'),
         },
         {
           path: 'settings',

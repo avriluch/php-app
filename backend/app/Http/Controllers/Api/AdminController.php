@@ -48,6 +48,7 @@ class AdminController extends Controller
                 'email' => $u->email,
                 'telefono' => $u->telefono,
                 'role' => $u->role->value,
+                'activo' => (bool) $u->activo,
                 'foto_perfil' => $u->foto_perfil,
                 'created_at' => $u->created_at?->toIso8601String(),
                 'profesional' => $u->professionalProfile ? [
@@ -107,6 +108,120 @@ class AdminController extends Controller
                 'total' => (float) Payment::where('estado', PaymentStatus::Completado->value)
                     ->sum('monto'),
             ],
+        ]);
+    }
+
+    /**
+     * Feed unificado de actividad reciente: registros, reservas y pagos,
+     * ordenados del más nuevo al más viejo.
+     */
+    public function activity(): JsonResponse
+    {
+        $usuarios = User::query()
+            ->latest()
+            ->limit(8)
+            ->get(['id', 'nombre', 'apellido', 'role', 'created_at'])
+            ->map(fn (User $u) => [
+                'tipo' => 'usuario',
+                'descripcion' => trim("{$u->nombre} {$u->apellido}") . ' se registró como ' . $u->role->value,
+                'fecha' => $u->created_at?->toIso8601String(),
+                'timestamp' => $u->created_at?->timestamp ?? 0,
+            ]);
+
+        $reservas = Booking::query()
+            ->with(['client:id,nombre,apellido', 'service:id,nombre'])
+            ->latest()
+            ->limit(8)
+            ->get()
+            ->map(fn (Booking $b) => [
+                'tipo' => 'reserva',
+                'descripcion' => trim(($b->client?->nombre ?? 'Alguien') . ' ' . ($b->client?->apellido ?? ''))
+                    . ' reservó ' . ($b->service?->nombre ?? 'un servicio'),
+                'estado' => $b->estado?->value,
+                'fecha' => $b->created_at?->toIso8601String(),
+                'timestamp' => $b->created_at?->timestamp ?? 0,
+            ]);
+
+        $pagos = Payment::query()
+            ->where('estado', PaymentStatus::Completado->value)
+            ->latest()
+            ->limit(8)
+            ->get()
+            ->map(fn (Payment $p) => [
+                'tipo' => 'pago',
+                'descripcion' => 'Pago de $ ' . number_format((float) $p->monto, 0, ',', '.') . ' recibido',
+                'fecha' => $p->created_at?->toIso8601String(),
+                'timestamp' => $p->created_at?->timestamp ?? 0,
+            ]);
+
+        $feed = $usuarios->concat($reservas)->concat($pagos)
+            ->sortByDesc('timestamp')
+            ->take(12)
+            ->map(fn (array $item) => collect($item)->except('timestamp')->all())
+            ->values()
+            ->all();
+
+        return response()->json(['data' => $feed]);
+    }
+
+    /**
+     * Cambia el rol de un usuario. Si pasa a profesional y no tiene perfil, se lo crea.
+     */
+    public function updateUserRole(Request $request, int $id): JsonResponse
+    {
+        $usuario = User::findOrFail($id);
+
+        if ($usuario->id === $request->user()->id) {
+            return response()->json(['message' => 'No podés cambiar tu propio rol.'], 422);
+        }
+
+        $datos = $request->validate([
+            'role' => ['required', 'string', 'in:client,professional,admin'],
+        ]);
+
+        $nuevoRol = UserRole::from($datos['role']);
+
+        if ($nuevoRol === UserRole::Professional && ! $usuario->professionalProfile) {
+            ProfessionalProfile::create([
+                'user_id' => $usuario->id,
+                'titulo' => 'Profesional',
+            ]);
+        }
+
+        $usuario->role = $nuevoRol;
+        $usuario->save();
+
+        return response()->json([
+            'message' => 'Rol actualizado.',
+            'role' => $usuario->role->value,
+        ]);
+    }
+
+    /**
+     * Activa o suspende un usuario. Al suspender, se cierran sus sesiones activas.
+     */
+    public function updateUserStatus(Request $request, int $id): JsonResponse
+    {
+        $usuario = User::findOrFail($id);
+
+        if ($usuario->id === $request->user()->id) {
+            return response()->json(['message' => 'No podés suspender tu propia cuenta.'], 422);
+        }
+
+        $datos = $request->validate([
+            'activo' => ['required', 'boolean'],
+        ]);
+
+        $usuario->activo = $datos['activo'];
+        $usuario->save();
+
+        if (! $usuario->activo) {
+            $usuario->tokens()->delete();
+        }
+
+        return response()->json([
+            'message' => $usuario->activo ? 'Usuario activado.' : 'Usuario suspendido.',
+            'activo' => $usuario->activo,
         ]);
     }
 }
