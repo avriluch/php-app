@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Calendar, Clock, MapPin, Video, CheckCircle, XCircle, AlertCircle, Loader, Star } from '@lucide/vue'
 import api from '@/services/api'
@@ -22,6 +22,17 @@ const cancellingId = ref(null)
 const cancelConfirmationId = ref(null)
 const cancelError = ref(null)
 
+// Reschedule
+const reschedulingId = ref(null)
+const reschedulingBooking = ref(null)
+const rescheduleForm = ref({ fecha: '' })
+const slots = ref([])
+const selectedSlot = ref(null)
+const slotsLoading = ref(false)
+const rescheduleLoading = ref(false)
+const rescheduleError = ref(null)
+const today = new Date().toISOString().split('T')[0]
+
 const estadoConfig = {
   pendiente:   { label: 'Pendiente',   variant: 'default', icon: AlertCircle },
   confirmada:  { label: 'Confirmada',  variant: 'primary', icon: CheckCircle },
@@ -39,6 +50,91 @@ const formatFecha = (iso) => new Date(iso).toLocaleDateString('es-UY', {
 })
 const formatHora = (iso) => new Date(iso).toLocaleTimeString('es-UY', { hour: '2-digit', minute: '2-digit' })
 const formatPrice = (n) => new Intl.NumberFormat('es-UY', { style: 'currency', currency: 'UYU' }).format(n)
+
+const canCancelBooking = (booking) => {
+  const isCancelableState = ['pendiente', 'confirmada', 'pagada'].includes(booking.estado)
+  const isInFuture = new Date(booking.fecha_hora).getTime() > Date.now()
+  return isCancelableState && isInFuture
+}
+
+const canRescheduleBooking = (booking) => {
+  const isReschedulableState = ['pendiente', 'confirmada', 'pagada'].includes(booking.estado)
+  const isInFuture = new Date(booking.fecha_hora).getTime() > Date.now()
+  return isReschedulableState && isInFuture
+}
+
+function openReschedule(booking) {
+  reschedulingId.value = booking.id
+  reschedulingBooking.value = booking
+  const fecha = new Date(booking.fecha_hora)
+  rescheduleForm.value = { fecha: fecha.toISOString().split('T')[0] }
+  selectedSlot.value = null
+  slots.value = []
+  rescheduleError.value = null
+  loadRescheduleSlots(rescheduleForm.value.fecha)
+}
+
+function closeReschedule() {
+  reschedulingId.value = null
+  reschedulingBooking.value = null
+  selectedSlot.value = null
+  slots.value = []
+  rescheduleError.value = null
+}
+
+async function loadRescheduleSlots(fecha) {
+  if (!reschedulingBooking.value || !fecha) return
+  slots.value = []
+  selectedSlot.value = null
+  slotsLoading.value = true
+
+  try {
+    const { data } = await api.get(`/professionals/${reschedulingBooking.value.professional.id}/availability`, {
+      params: { service_id: reschedulingBooking.value.service.id, from: fecha, to: fecha },
+    })
+    const ahora = Date.now()
+    slots.value = (data.slots ?? []).map((slot) => ({
+      ...slot,
+      available: slot.available && new Date(slot.start).getTime() > ahora,
+    }))
+  } catch {
+    slots.value = []
+  } finally {
+    slotsLoading.value = false
+  }
+}
+
+watch(() => rescheduleForm.value.fecha, loadRescheduleSlots)
+
+async function confirmReschedule(booking) {
+  if (!selectedSlot.value) {
+    rescheduleError.value = 'Elegí un horario disponible.'
+    return
+  }
+
+  const diffMs = new Date(selectedSlot.value.start).getTime() - Date.now()
+  if (diffMs < 24 * 60 * 60 * 1000) {
+    rescheduleError.value = 'La reserva debe reagendarse con al menos 24 horas de anticipación.'
+    return
+  }
+
+  rescheduleLoading.value = true
+  rescheduleError.value = null
+
+  try {
+    const { data } = await api.patch(`/bookings/${booking.id}/reschedule`, {
+      fecha_hora: selectedSlot.value.start,
+    })
+
+    const idx = bookings.value.findIndex((b) => b.id === booking.id)
+    if (idx !== -1) bookings.value[idx] = data
+    closeReschedule()
+  } catch (e) {
+    rescheduleError.value = e.response?.data?.message ?? e.message ?? 'No se pudo reagendar la reserva.'
+  } finally {
+    rescheduleLoading.value = false
+  }
+}
 
 onMounted(async () => {
   loading.value = true
@@ -63,7 +159,6 @@ function closeReview() {
   reviewingId.value = null
   reviewError.value = null
 }
-
 
 function openCancelConfirmation(booking) {
   cancelConfirmationId.value = booking.id
@@ -100,7 +195,6 @@ async function submitReview(booking) {
   reviewError.value = null
   try {
     const { data } = await api.post(`/bookings/${booking.id}/review`, reviewForm.value)
-    // Actualiza la reserva en la lista sin recargar todo
     const idx = bookings.value.findIndex(b => b.id === booking.id)
     if (idx !== -1) bookings.value[idx] = { ...bookings.value[idx], review: data }
     closeReview()
@@ -198,13 +292,21 @@ async function submitReview(booking) {
             <!-- Botones de acción -->
             <div class="mt-3 flex flex-wrap gap-2">
               <AppButton
-                v-if="['pendiente', 'confirmada', 'pagada'].includes(b.estado)"
+                v-if="canCancelBooking(b)"
                 variant="outline" size="sm"
                 :class="'border-red-600 text-red-600 hover:bg-red-50'"
                 :disabled="cancelConfirmationId === b.id"
                 @click="openCancelConfirmation(b)"
               >
                 Eliminar reserva
+              </AppButton>
+
+              <AppButton
+                v-if="canRescheduleBooking(b)"
+                variant="primary" size="sm"
+                @click="openReschedule(b)"
+              >
+                Reagendar
               </AppButton>
 
               <AppButton
@@ -251,6 +353,76 @@ async function submitReview(booking) {
                     </AppButton>
                   </div>
                   <p v-if="cancelError" class="text-sm text-red-600">{{ cancelError }}</p>
+                </div>
+              </AppCard>
+            </div>
+
+            <div v-if="reschedulingId === b.id" class="mt-4">
+              <AppCard padding="md" class="border-primary-200 bg-primary-50">
+                <div class="space-y-4">
+                  <div>
+                    <p class="font-semibold text-neutral-900">Reagendar reserva</p>
+                    <p class="text-sm text-neutral-500">Elegí una nueva fecha y horario disponible.</p>
+                  </div>
+
+                  <label class="block">
+                    <span class="text-sm font-medium text-neutral-700">Fecha</span>
+                    <input
+                      type="date"
+                      v-model="rescheduleForm.fecha"
+                      :min="today"
+                      class="mt-1 w-full border border-neutral-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </label>
+
+                  <div v-if="slotsLoading" class="flex justify-center py-6">
+                    <AppSpinner size="md" />
+                  </div>
+
+                  <div v-else-if="slots.length === 0 && rescheduleForm.fecha" class="text-sm text-neutral-500 text-center py-6">
+                    No hay horarios disponibles para este día.
+                  </div>
+
+                  <div v-else-if="slots.length > 0" class="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                    <button
+                      v-for="slot in slots"
+                      :key="slot.start"
+                      type="button"
+                      :class="[
+                        'py-2 px-3 rounded-lg text-sm font-medium border transition-colors',
+                        !slot.available
+                          ? 'bg-neutral-100 text-neutral-400 border-neutral-200 cursor-not-allowed'
+                          : selectedSlot?.start === slot.start
+                            ? 'bg-primary-600 text-white border-primary-600'
+                            : 'bg-white text-neutral-700 border-neutral-300 hover:border-primary-400 hover:text-primary-600 cursor-pointer'
+                      ]"
+                      :disabled="!slot.available"
+                      @click="selectedSlot = slot"
+                    >
+                      {{ formatHora(slot.start) }}
+                    </button>
+                  </div>
+
+                  <p class="text-xs text-neutral-500">
+                    La nueva fecha debe ser al menos 24 horas después de ahora.
+                  </p>
+
+                  <div class="flex flex-wrap gap-2">
+                    <AppButton
+                      variant="primary"
+                      size="sm"
+                      :loading="rescheduleLoading"
+                      :disabled="!selectedSlot"
+                      @click="confirmReschedule(b)"
+                    >
+                      Guardar cambios
+                    </AppButton>
+                    <AppButton variant="outline" size="sm" @click="closeReschedule">
+                      Cancelar
+                    </AppButton>
+                  </div>
+
+                  <p v-if="rescheduleError" class="text-sm text-red-600">{{ rescheduleError }}</p>
                 </div>
               </AppCard>
             </div>

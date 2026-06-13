@@ -251,10 +251,10 @@ class BookingController extends Controller
             'Solo el cliente puede reprogramar su reserva.',
         );
 
-        $estadosPermitidos = [BookingStatus::Pendiente, BookingStatus::Confirmada];
+        $estadosPermitidos = [BookingStatus::Pendiente, BookingStatus::Confirmada, BookingStatus::Pagada];
         if (! in_array($reserva->estado, $estadosPermitidos, true)) {
             throw ValidationException::withMessages([
-                'estado' => 'Solo se reprograman reservas pendientes o confirmadas.',
+                'estado' => 'Solo se reprograman reservas pendientes, confirmadas o pagadas.',
             ]);
         }
 
@@ -264,6 +264,12 @@ class BookingController extends Controller
 
         $fechaAnterior = $reserva->fecha_hora?->format('d/m/Y H:i');
         $nuevaFecha = Carbon::parse($datos['fecha_hora']);
+
+        if (Carbon::now()->addHours(24)->gt($nuevaFecha)) {
+            throw ValidationException::withMessages([
+                'fecha_hora' => 'Debe reprogramar con al menos 24 horas de anticipación.',
+            ]);
+        }
 
         DB::transaction(function () use ($reserva, $nuevaFecha) {
             if (! $this->disponibilidad->isSlotFree(
