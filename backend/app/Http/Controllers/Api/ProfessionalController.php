@@ -63,6 +63,26 @@ class ProfessionalController extends Controller
             $query->whereHas('location', fn (Builder $q) => $q->where('pais', $pais));
         }
 
+        $lat = $request->input('lat');
+        $lng = $request->input('lng');
+        $radiusKm = $request->input('radius_km');
+        $proximityActive = $lat !== null && $lng !== null;
+
+        if ($proximityActive) {
+            $request->validate([
+                'lat' => ['required', 'numeric', 'between:-90,90'],
+                'lng' => ['required', 'numeric', 'between:-180,180'],
+                'radius_km' => ['sometimes', 'numeric', 'min:1', 'max:500'],
+            ]);
+
+            $this->applyProximityFilter(
+                $query,
+                (float) $lat,
+                (float) $lng,
+                (float) ($radiusKm ?? 25),
+            );
+        }
+
         // Filtro por calificación mínima (promedio).
         if ($ratingMin = $request->input('rating_min')) {
             $query->having('reviews_avg_puntaje', '>=', (float) $ratingMin);
@@ -70,7 +90,10 @@ class ProfessionalController extends Controller
 
         // Orden: rating (default) o price (precio del servicio más barato).
         $sort = $request->string('sort', 'rating')->toString();
-        if ($sort === 'price') {
+        if ($sort === 'distance') {
+            abort_unless($proximityActive, 422, 'El orden por cercanía requiere lat y lng.');
+            $query->orderBy('distance_km');
+        } elseif ($sort === 'price') {
             $query->orderBy('precio_desde');
         } else {
             $query->orderByDesc('reviews_avg_puntaje');
@@ -199,6 +222,28 @@ class ProfessionalController extends Controller
             'descripcion' => $perfil->descripcion,
             'cancelacion_horas_minimas' => (int) $perfil->cancelacion_horas_minimas,
         ];
+    }
+
+    /**
+     * Filtra profesionales dentro de un radio (km) usando la fórmula de Haversine.
+     */
+    private function applyProximityFilter(Builder $query, float $lat, float $lng, float $radiusKm): void
+    {
+        $inner = 'cos(radians(' . $lat . ')) * cos(radians(locations.latitud))'
+            . ' * cos(radians(locations.longitud) - radians(' . $lng . '))'
+            . ' + sin(radians(' . $lat . ')) * sin(radians(locations.latitud))';
+
+        $clamped = config('database.default') === 'sqlite'
+            ? "(CASE WHEN ({$inner}) > 1 THEN 1 WHEN ({$inner}) < -1 THEN -1 ELSE ({$inner}) END)"
+            : "LEAST(1.0, GREATEST(-1.0, ({$inner})))";
+
+        $haversine = "(6371 * acos({$clamped}))";
+
+        $query->whereNotNull('professional_profiles.location_id')
+            ->join('locations', 'professional_profiles.location_id', '=', 'locations.id')
+            ->select('professional_profiles.*')
+            ->selectRaw("{$haversine} AS distance_km")
+            ->whereRaw("{$haversine} <= ?", [$radiusKm]);
     }
 
     private function baseQuery(): Builder

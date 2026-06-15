@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsurePlatformAvailable;
 use App\Http\Middleware\EnsureUserHasRole;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -16,6 +17,10 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->alias([
             'role' => EnsureUserHasRole::class,
+        ]);
+
+        $middleware->api(prepend: [
+            EnsurePlatformAvailable::class,
         ]);
 
         // API con Bearer tokens (Vue desacoplado). No usar EnsureFrontendRequestsAreStateful

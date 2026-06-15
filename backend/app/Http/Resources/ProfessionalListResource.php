@@ -29,6 +29,10 @@ class ProfessionalListResource extends JsonResource
                 $this->relationLoaded('location') && $this->location,
                 fn () => new LocationResource($this->location)
             ),
+            'distance_km' => $this->when(
+                isset($this->distance_km),
+                fn () => round((float) $this->distance_km, 1)
+            ),
         ];
     }
 }

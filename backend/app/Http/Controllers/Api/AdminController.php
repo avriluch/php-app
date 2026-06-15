@@ -8,6 +8,7 @@ use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
 use App\Models\Payment;
+use App\Models\PlatformSetting;
 use App\Models\ProfessionalProfile;
 use App\Models\User;
 use Carbon\Carbon;
@@ -222,6 +223,33 @@ class AdminController extends Controller
         return response()->json([
             'message' => $usuario->activo ? 'Usuario activado.' : 'Usuario suspendido.',
             'activo' => $usuario->activo,
+        ]);
+    }
+
+    public function settings(): JsonResponse
+    {
+        return response()->json(PlatformSetting::current()->toAdminArray());
+    }
+
+    public function updateSettings(Request $request): JsonResponse
+    {
+        $datos = $request->validate([
+            'nombre_plataforma' => ['required', 'string', 'max:120'],
+            'email_soporte' => ['nullable', 'email', 'max:255'],
+            'mensaje_mantenimiento' => ['nullable', 'string', 'max:2000'],
+            'registro_abierto' => ['required', 'boolean'],
+            'mantenimiento_activo' => ['required', 'boolean'],
+            'recordatorio_horas_antes' => ['required', 'integer', 'between:1,168'],
+            'antelacion_reserva_min_horas' => ['required', 'integer', 'between:0,168'],
+        ]);
+
+        $settings = PlatformSetting::current();
+        $settings->fill($datos);
+        $settings->save();
+
+        return response()->json([
+            'message' => 'Configuración actualizada.',
+            'settings' => $settings->fresh()->toAdminArray(),
         ]);
     }
 }

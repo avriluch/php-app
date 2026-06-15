@@ -14,6 +14,7 @@ class Agenda extends Model
         'horario_fin',
         'dias_disponibles',
         'buffer_minutos',
+        'pausa_entre_sesiones_minutos',
     ];
 
     protected function casts(): array

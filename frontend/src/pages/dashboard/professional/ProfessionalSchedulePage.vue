@@ -29,6 +29,7 @@ const formulario = reactive({
   horario_fin: '18:00',
   dias_disponibles: [1, 2, 3, 4, 5],
   buffer_minutos: 15,
+  pausa_entre_sesiones_minutos: 0,
 })
 const erroresAgenda = ref({})
 
@@ -46,6 +47,7 @@ async function cargar() {
       formulario.horario_fin = data.agenda.horario_fin
       formulario.dias_disponibles = [...data.agenda.dias_disponibles]
       formulario.buffer_minutos = data.agenda.buffer_minutos
+      formulario.pausa_entre_sesiones_minutos = data.agenda.pausa_entre_sesiones_minutos ?? 0
       excepciones.value = data.agenda.exceptions ?? []
     }
   } catch (e) {
@@ -75,6 +77,7 @@ async function guardar() {
       horario_fin: formulario.horario_fin,
       dias_disponibles: formulario.dias_disponibles,
       buffer_minutos: Number(formulario.buffer_minutos),
+      pausa_entre_sesiones_minutos: Number(formulario.pausa_entre_sesiones_minutos),
     })
     mensajeOk.value = 'Agenda guardada.'
     setTimeout(() => (mensajeOk.value = null), 3000)
@@ -209,10 +212,20 @@ onMounted(cargar)
         <AppInput
           v-model="formulario.buffer_minutos"
           type="number"
-          label="Buffer entre reservas (minutos)"
-          hint="Tiempo de descanso entre turnos consecutivos."
+          label="Buffer entre horarios ofrecidos (minutos)"
+          hint="Separación entre inicios de turno en la grilla (preparación, notas, etc.)."
           :error="erroresAgenda.buffer_minutos?.[0]"
           required
+        />
+
+        <AppInput
+          v-model="formulario.pausa_entre_sesiones_minutos"
+          type="number"
+          label="Pausa entre sesiones (minutos)"
+          hint="Descanso obligatorio después de cada sesión antes de que pueda empezar la siguiente."
+          :error="erroresAgenda.pausa_entre_sesiones_minutos?.[0]"
+          required
+          class="mt-4"
         />
 
         <div class="mt-5 flex justify-end">

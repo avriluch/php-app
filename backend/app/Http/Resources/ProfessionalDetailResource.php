@@ -37,6 +37,7 @@ class ProfessionalDetailResource extends JsonResource
                 'horario_fin' => substr((string) $agenda->horario_fin, 0, 5),
                 'dias_disponibles' => $agenda->dias_disponibles,
                 'buffer_minutos' => $agenda->buffer_minutos,
+                'pausa_entre_sesiones_minutos' => $agenda->pausa_entre_sesiones_minutos,
             ]),
         ];
     }

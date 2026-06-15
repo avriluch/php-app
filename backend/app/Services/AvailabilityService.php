@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\BookingStatus;
 use App\Models\Agenda;
 use App\Models\Booking;
+use App\Models\PlatformSetting;
 use App\Models\Service;
 use Carbon\Carbon;
 use Carbon\CarbonImmutable;
@@ -14,7 +15,7 @@ class AvailabilityService
 {
     /**
      * Genera slots disponibles para un profesional en el rango [desde, hasta],
-     * respetando agenda (horario, días, buffer), excepciones y reservas activas.
+     * respetando agenda (horario, días, buffer, pausa entre sesiones), excepciones y reservas activas.
      *
      * @return Collection<int, array{start:string, end:string, available:bool}>
      */
@@ -30,6 +31,7 @@ class AvailabilityService
         }
 
         $bufferMinutos = (int) $agenda->buffer_minutos;
+        $pausaMinutos = (int) $agenda->pausa_entre_sesiones_minutos;
         $pasoMinutos = $duracionMinutos + $bufferMinutos;
         $diasDisponibles = array_map('intval', $agenda->dias_disponibles ?? []);
 
@@ -44,10 +46,13 @@ class AvailabilityService
             $agenda->professional_profile_id,
             $desde->copy()->startOfDay(),
             $hasta->copy()->endOfDay(),
+            pausaMinutos: $pausaMinutos,
         );
 
         $slots = collect();
         $ahora = Carbon::now();
+        $antelacionHoras = (int) PlatformSetting::current()->antelacion_reserva_min_horas;
+        $limiteAntelacion = $antelacionHoras > 0 ? $ahora->copy()->addHours($antelacionHoras) : $ahora;
         // El rango [desde, hasta] se interpreta como días completos: desde el inicio
         // del día "desde" hasta el fin del día "hasta", inclusive.
         $diaActual = $desde->copy()->startOfDay();
@@ -66,8 +71,8 @@ class AvailabilityService
                 while ($inicioSlot->copy()->addMinutes($duracionMinutos)->lte($finJornada)) {
                     $finSlot = $inicioSlot->copy()->addMinutes($duracionMinutos);
 
-                    // No ofrecer turnos que ya empezaron (mismo día u horario pasado).
-                    if ($inicioSlot->lt($ahora)) {
+                    // No ofrecer turnos que ya empezaron ni dentro de la antelación mínima.
+                    if ($inicioSlot->lt($limiteAntelacion)) {
                         $inicioSlot->addMinutes($pasoMinutos);
                         continue;
                     }
@@ -105,9 +110,21 @@ class AvailabilityService
         Carbon $inicio,
         int $duracionMinutos,
         ?int $ignorarReservaId = null,
+        ?int $pausaMinutos = null,
     ): bool {
         if ($inicio->lt(Carbon::now())) {
             return false;
+        }
+
+        $antelacionHoras = (int) PlatformSetting::current()->antelacion_reserva_min_horas;
+        if ($antelacionHoras > 0 && $inicio->lt(Carbon::now()->addHours($antelacionHoras))) {
+            return false;
+        }
+
+        if ($pausaMinutos === null) {
+            $pausaMinutos = (int) Agenda::query()
+                ->where('professional_profile_id', $professionalProfileId)
+                ->value('pausa_entre_sesiones_minutos');
         }
 
         $fin = $inicio->copy()->addMinutes($duracionMinutos);
@@ -117,6 +134,7 @@ class AvailabilityService
             $inicio->copy()->subDay(),
             $fin->copy()->addDay(),
             $ignorarReservaId,
+            $pausaMinutos,
         );
 
         return ! $this->seSolapa($inicio, $fin, $reservas);
@@ -130,6 +148,7 @@ class AvailabilityService
         Carbon $desde,
         Carbon $hasta,
         ?int $ignorarReservaId = null,
+        int $pausaMinutos = 0,
     ): array {
         $reservas = Booking::query()
             ->with('service:id,duracion')
@@ -142,13 +161,13 @@ class AvailabilityService
             ->when($ignorarReservaId, fn ($q) => $q->where('id', '!=', $ignorarReservaId))
             ->get();
 
-        return $reservas->map(function (Booking $r) {
+        return $reservas->map(function (Booking $r) use ($pausaMinutos) {
             $inicio = CarbonImmutable::instance($r->fecha_hora);
             $duracion = (int) ($r->service?->duracion ?? 0);
 
             return [
                 'inicio' => $inicio,
-                'fin' => $inicio->addMinutes($duracion),
+                'fin' => $inicio->addMinutes($duracion + $pausaMinutos),
             ];
         })->all();
     }

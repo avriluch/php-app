@@ -9,6 +9,7 @@ use App\Enums\UserRole;
 use App\Models\Agenda;
 use App\Models\Booking;
 use App\Models\Location;
+use App\Models\PlatformSetting;
 use App\Models\ProfessionalProfile;
 use App\Models\Review;
 use App\Models\Service;
@@ -21,20 +22,79 @@ class DemoCatalogSeeder extends Seeder
 {
     public function run(): void
     {
-        $password = Hash::make('password');
-
-        $montevideo = Location::create([
-            'ciudad' => 'Montevideo',
-            'pais' => 'UY',
-            'latitud' => -34.901112,
-            'longitud' => -56.164531,
+        PlatformSetting::current()->update([
+            'nombre_plataforma' => 'ServiConnect',
+            'email_soporte' => 'soporte@serviconnect.test',
+            'registro_abierto' => true,
+            'mantenimiento_activo' => false,
+            'recordatorio_horas_antes' => 24,
+            'antelacion_reserva_min_horas' => 1,
         ]);
 
-        $punta = Location::create([
-            'ciudad' => 'Punta del Este',
+        $password = Hash::make('password');
+
+        // Montevideo: un punto por barrio para que el mapa muestre profesionales repartidos.
+        $mvPocitos = Location::create([
+            'ciudad' => 'Montevideo — Pocitos',
             'pais' => 'UY',
-            'latitud' => -34.961456,
-            'longitud' => -54.949202,
+            'latitud' => -34.909400,
+            'longitud' => -56.155900,
+        ]);
+        $mvCordon = Location::create([
+            'ciudad' => 'Montevideo — Cordón',
+            'pais' => 'UY',
+            'latitud' => -34.901100,
+            'longitud' => -56.179200,
+        ]);
+        $mvCiudadVieja = Location::create([
+            'ciudad' => 'Montevideo — Ciudad Vieja',
+            'pais' => 'UY',
+            'latitud' => -34.906700,
+            'longitud' => -56.208900,
+        ]);
+        $mvCentro = Location::create([
+            'ciudad' => 'Montevideo — Centro',
+            'pais' => 'UY',
+            'latitud' => -34.905500,
+            'longitud' => -56.191200,
+        ]);
+        $mvPrado = Location::create([
+            'ciudad' => 'Montevideo — Prado',
+            'pais' => 'UY',
+            'latitud' => -34.857500,
+            'longitud' => -56.188000,
+        ]);
+        $mvMalvin = Location::create([
+            'ciudad' => 'Montevideo — Malvín',
+            'pais' => 'UY',
+            'latitud' => -34.891000,
+            'longitud' => -56.105000,
+        ]);
+        $mvBuceo = Location::create([
+            'ciudad' => 'Montevideo — Buceo',
+            'pais' => 'UY',
+            'latitud' => -34.877500,
+            'longitud' => -56.134000,
+        ]);
+        $mvParqueRodo = Location::create([
+            'ciudad' => 'Montevideo — Parque Rodó',
+            'pais' => 'UY',
+            'latitud' => -34.914000,
+            'longitud' => -56.166500,
+        ]);
+
+        $puntaMansa = Location::create([
+            'ciudad' => 'Punta del Este — Playa Mansa',
+            'pais' => 'UY',
+            'latitud' => -34.955000,
+            'longitud' => -54.942000,
+        ]);
+
+        $puntaPuerto = Location::create([
+            'ciudad' => 'Punta del Este — Puerto',
+            'pais' => 'UY',
+            'latitud' => -34.968500,
+            'longitud' => -54.951500,
         ]);
 
         $colonia = Location::create([
@@ -66,7 +126,7 @@ class DemoCatalogSeeder extends Seeder
             [
                 'titulo' => 'Nutricionista',
                 'descripcion' => 'Consultas presenciales y virtuales. Especialista en hábitos saludables.',
-                'location_id' => $montevideo->id,
+                'location_id' => $mvPocitos->id,
                 'cancelacion_horas_minimas' => 24,
             ],
             [
@@ -74,6 +134,7 @@ class DemoCatalogSeeder extends Seeder
                 'horario_fin' => '18:00:00',
                 'dias_disponibles' => [1, 2, 3, 4, 5],
                 'buffer_minutos' => 15,
+                'pausa_entre_sesiones_minutos' => 10,
             ],
             [
                 [
@@ -83,7 +144,7 @@ class DemoCatalogSeeder extends Seeder
                     'duracion' => 60,
                     'precio' => 1500,
                     'modalidad' => Modalidad::Presencial,
-                    'location_id' => $montevideo->id,
+                    'location_id' => $mvPocitos->id,
                 ],
                 [
                     'type' => ServiceType::Session,
@@ -108,39 +169,39 @@ class DemoCatalogSeeder extends Seeder
         $perfilValentina = $this->crearProfesional(
             $password,
             ['nombre' => 'Valentina', 'apellido' => 'Ruiz', 'email' => 'valentina.ruiz@demo.test', 'telefono' => '+59899222001'],
-            ['titulo' => 'Psicóloga clínica', 'descripcion' => 'Terapia individual online y presencial.', 'location_id' => $montevideo->id, 'cancelacion_horas_minimas' => 12],
+            ['titulo' => 'Psicóloga clínica', 'descripcion' => 'Terapia individual online y presencial.', 'location_id' => $mvCordon->id, 'cancelacion_horas_minimas' => 12],
             ['horario_inicio' => '10:00:00', 'horario_fin' => '19:00:00', 'dias_disponibles' => [1, 2, 3, 4, 5], 'buffer_minutos' => 10],
             [
                 ['type' => ServiceType::Session, 'nombre' => 'Sesión psicología', 'duracion' => 50, 'precio' => 1800, 'modalidad' => Modalidad::Virtual],
-                ['type' => ServiceType::Session, 'nombre' => 'Sesión presencial', 'duracion' => 50, 'precio' => 2200, 'modalidad' => Modalidad::Presencial, 'location_id' => $montevideo->id],
+                ['type' => ServiceType::Session, 'nombre' => 'Sesión presencial', 'duracion' => 50, 'precio' => 2200, 'modalidad' => Modalidad::Presencial, 'location_id' => $mvCordon->id],
             ],
         );
 
         $perfilMartin = $this->crearProfesional(
             $password,
             ['nombre' => 'Martín', 'apellido' => 'Gómez', 'email' => 'martin.gomez@demo.test', 'telefono' => '+59899333001'],
-            ['titulo' => 'Entrenador personal', 'descripcion' => 'Fuerza, cardio y planes a medida en Punta del Este.', 'location_id' => $punta->id, 'cancelacion_horas_minimas' => 48],
+            ['titulo' => 'Entrenador personal', 'descripcion' => 'Fuerza, cardio y planes a medida en Punta del Este.', 'location_id' => $puntaMansa->id, 'cancelacion_horas_minimas' => 48],
             ['horario_inicio' => '07:00:00', 'horario_fin' => '14:00:00', 'dias_disponibles' => [1, 2, 3, 4, 5, 6], 'buffer_minutos' => 20],
             [
-                ['type' => ServiceType::Session, 'nombre' => 'Entrenamiento 1h', 'duracion' => 60, 'precio' => 3500, 'modalidad' => Modalidad::Presencial, 'location_id' => $punta->id],
-                ['type' => ServiceType::Package, 'nombre' => 'Pack 10 entrenamientos', 'duracion' => 60, 'precio' => 28000, 'modalidad' => Modalidad::Presencial, 'cantidad_sesiones' => 10, 'location_id' => $punta->id],
+                ['type' => ServiceType::Session, 'nombre' => 'Entrenamiento 1h', 'duracion' => 60, 'precio' => 3500, 'modalidad' => Modalidad::Presencial, 'location_id' => $puntaMansa->id],
+                ['type' => ServiceType::Package, 'nombre' => 'Pack 10 entrenamientos', 'duracion' => 60, 'precio' => 28000, 'modalidad' => Modalidad::Presencial, 'cantidad_sesiones' => 10, 'location_id' => $puntaMansa->id],
             ],
         );
 
         $this->crearProfesional(
             $password,
             ['nombre' => 'Laura', 'apellido' => 'Fernández', 'email' => 'laura.fernandez@demo.test'],
-            ['titulo' => 'Abogada laboral', 'descripcion' => 'Asesoría en derecho laboral uruguayo.', 'location_id' => $montevideo->id, 'cancelacion_horas_minimas' => 24],
+            ['titulo' => 'Abogada laboral', 'descripcion' => 'Asesoría en derecho laboral uruguayo.', 'location_id' => $mvCiudadVieja->id, 'cancelacion_horas_minimas' => 24],
             ['horario_inicio' => '14:00:00', 'horario_fin' => '20:00:00', 'dias_disponibles' => [1, 2, 3, 4, 5], 'buffer_minutos' => 0],
             [
-                ['type' => ServiceType::Session, 'nombre' => 'Consulta legal', 'duracion' => 40, 'precio' => 4000, 'modalidad' => Modalidad::Presencial, 'location_id' => $montevideo->id],
+                ['type' => ServiceType::Session, 'nombre' => 'Consulta legal', 'duracion' => 40, 'precio' => 4000, 'modalidad' => Modalidad::Presencial, 'location_id' => $mvCiudadVieja->id],
             ],
         );
 
         $this->crearProfesional(
             $password,
             ['nombre' => 'Diego', 'apellido' => 'Morales', 'email' => 'diego.morales@demo.test'],
-            ['titulo' => 'Profesor de inglés', 'descripcion' => 'Clases para todos los niveles, 100% virtual.', 'location_id' => $montevideo->id, 'cancelacion_horas_minimas' => 6],
+            ['titulo' => 'Profesor de inglés', 'descripcion' => 'Clases para todos los niveles, 100% virtual.', 'location_id' => $mvCentro->id, 'cancelacion_horas_minimas' => 6],
             ['horario_inicio' => '08:00:00', 'horario_fin' => '22:00:00', 'dias_disponibles' => [0, 1, 2, 3, 4, 5, 6], 'buffer_minutos' => 5],
             [
                 ['type' => ServiceType::Session, 'nombre' => 'Clase de inglés', 'duracion' => 45, 'precio' => 900, 'modalidad' => Modalidad::Virtual],
@@ -161,7 +222,7 @@ class DemoCatalogSeeder extends Seeder
         $this->crearProfesional(
             $password,
             ['nombre' => 'Jorge', 'apellido' => 'Castells', 'email' => 'jorge.castells@demo.test'],
-            ['titulo' => 'Contador público', 'descripcion' => 'Impuestos, monotributo y asesoría para pymes.', 'location_id' => $montevideo->id, 'cancelacion_horas_minimas' => 24],
+            ['titulo' => 'Contador público', 'descripcion' => 'Impuestos, monotributo y asesoría para pymes.', 'location_id' => $mvPrado->id, 'cancelacion_horas_minimas' => 24],
             ['horario_inicio' => '09:00:00', 'horario_fin' => '13:00:00', 'dias_disponibles' => [1, 2, 3, 4, 5], 'buffer_minutos' => 0],
             [
                 ['type' => ServiceType::Session, 'nombre' => 'Asesoría contable', 'duracion' => 30, 'precio' => 800, 'modalidad' => Modalidad::Virtual],
@@ -171,18 +232,18 @@ class DemoCatalogSeeder extends Seeder
         $this->crearProfesional(
             $password,
             ['nombre' => 'Patricia', 'apellido' => 'Lima', 'email' => 'patricia.lima@demo.test'],
-            ['titulo' => 'Fisioterapeuta', 'descripcion' => 'Rehabilitación y dolor lumbar.', 'location_id' => $montevideo->id, 'cancelacion_horas_minimas' => 24],
+            ['titulo' => 'Fisioterapeuta', 'descripcion' => 'Rehabilitación y dolor lumbar.', 'location_id' => $mvMalvin->id, 'cancelacion_horas_minimas' => 24],
             ['horario_inicio' => '11:00:00', 'horario_fin' => '19:00:00', 'dias_disponibles' => [1, 2, 3, 4, 5], 'buffer_minutos' => 10],
             [
-                ['type' => ServiceType::Session, 'nombre' => 'Sesión kinesiología', 'duracion' => 50, 'precio' => 2000, 'modalidad' => Modalidad::Presencial, 'location_id' => $montevideo->id],
-                ['type' => ServiceType::Package, 'nombre' => 'Pack 6 sesiones', 'duracion' => 50, 'precio' => 10000, 'modalidad' => Modalidad::Presencial, 'cantidad_sesiones' => 6, 'location_id' => $montevideo->id],
+                ['type' => ServiceType::Session, 'nombre' => 'Sesión kinesiología', 'duracion' => 50, 'precio' => 2000, 'modalidad' => Modalidad::Presencial, 'location_id' => $mvMalvin->id],
+                ['type' => ServiceType::Package, 'nombre' => 'Pack 6 sesiones', 'duracion' => 50, 'precio' => 10000, 'modalidad' => Modalidad::Presencial, 'cantidad_sesiones' => 6, 'location_id' => $mvMalvin->id],
             ],
         );
 
         $this->crearProfesional(
             $password,
             ['nombre' => 'Andrés', 'apellido' => 'Vega', 'email' => 'andres.vega@demo.test'],
-            ['titulo' => 'Diseñador UX', 'descripcion' => 'Portfolio, wireframes y research.', 'location_id' => $montevideo->id, 'cancelacion_horas_minimas' => 12],
+            ['titulo' => 'Diseñador UX', 'descripcion' => 'Portfolio, wireframes y research.', 'location_id' => $mvBuceo->id, 'cancelacion_horas_minimas' => 12],
             ['horario_inicio' => '15:00:00', 'horario_fin' => '21:00:00', 'dias_disponibles' => [1, 3, 4, 5], 'buffer_minutos' => 0],
             [
                 ['type' => ServiceType::Session, 'nombre' => 'Mentoría UX', 'duracion' => 60, 'precio' => 2500, 'modalidad' => Modalidad::Virtual],
@@ -192,20 +253,20 @@ class DemoCatalogSeeder extends Seeder
         $this->crearProfesional(
             $password,
             ['nombre' => 'Carmen', 'apellido' => 'Ortiz', 'email' => 'carmen.ortiz@demo.test'],
-            ['titulo' => 'Coach de carrera', 'descripcion' => 'CV, entrevistas y búsqueda laboral.', 'location_id' => $montevideo->id, 'cancelacion_horas_minimas' => 24],
+            ['titulo' => 'Coach de carrera', 'descripcion' => 'CV, entrevistas y búsqueda laboral.', 'location_id' => $mvParqueRodo->id, 'cancelacion_horas_minimas' => 24],
             ['horario_inicio' => '10:00:00', 'horario_fin' => '18:00:00', 'dias_disponibles' => [1, 2, 3, 4, 5], 'buffer_minutos' => 15],
             [
-                ['type' => ServiceType::Session, 'nombre' => 'Sesión coaching', 'duracion' => 55, 'precio' => 1600, 'modalidad' => Modalidad::Hibrida],
+                ['type' => ServiceType::Session, 'nombre' => 'Sesión coaching', 'duracion' => 55, 'precio' => 1600, 'modalidad' => Modalidad::Hibrida, 'location_id' => $mvParqueRodo->id],
             ],
         );
 
         $this->crearProfesional(
             $password,
             ['nombre' => 'Ricardo', 'apellido' => 'Núñez', 'email' => 'ricardo.nunez@demo.test'],
-            ['titulo' => 'Chef y cocina saludable', 'descripcion' => 'Talleres presenciales en Punta del Este.', 'location_id' => $punta->id, 'cancelacion_horas_minimas' => 48],
+            ['titulo' => 'Chef y cocina saludable', 'descripcion' => 'Talleres presenciales en Punta del Este.', 'location_id' => $puntaPuerto->id, 'cancelacion_horas_minimas' => 48],
             ['horario_inicio' => '16:00:00', 'horario_fin' => '21:00:00', 'dias_disponibles' => [5, 6, 0], 'buffer_minutos' => 30],
             [
-                ['type' => ServiceType::Session, 'nombre' => 'Taller cocina', 'duracion' => 120, 'precio' => 4500, 'modalidad' => Modalidad::Presencial, 'location_id' => $punta->id],
+                ['type' => ServiceType::Session, 'nombre' => 'Taller cocina', 'duracion' => 120, 'precio' => 4500, 'modalidad' => Modalidad::Presencial, 'location_id' => $puntaPuerto->id],
             ],
         );
 

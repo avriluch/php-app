@@ -1,11 +1,12 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { CheckCircle, AlertCircle } from '@lucide/vue'
+import { CheckCircle, AlertCircle, CreditCard } from '@lucide/vue'
 import api from '@/services/api'
 import AppCard from '@/components/ui/AppCard.vue'
 import AppSpinner from '@/components/ui/AppSpinner.vue'
 import AppButton from '@/components/ui/AppButton.vue'
+import AppInput from '@/components/ui/AppInput.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -14,11 +15,23 @@ const isPackagePayment = computed(() => route.name === 'payment-package')
 
 const loading = ref(true)
 const paypalLoading = ref(false)
+const cardSubmitting = ref(false)
 const error = ref(null)
+const cardError = ref(null)
 const success = ref(false)
 const payment = ref(null)
 const booking = ref(null)
 const packagePurchase = ref(null)
+
+const paymentMethod = ref('card')
+
+const cardForm = ref({
+  metodo: 'tarjeta_credito',
+  numero: '',
+  titular: '',
+  vencimiento: '',
+  cvv: '',
+})
 
 const paypalClientId = (import.meta.env.VITE_PAYPAL_CLIENT_ID ?? '').trim()
 const paypalConfigured = Boolean(paypalClientId)
@@ -32,6 +45,11 @@ const successMessage = computed(() =>
     ? 'Tu paquete quedó activo. Ya podés reservar sesiones desde Mis paquetes.'
     : 'Tu reserva ha sido confirmada y pagada exitosamente.',
 )
+
+const money = computed(() => {
+  const amount = payment.value?.monto ?? 0
+  return new Intl.NumberFormat('es-UY', { style: 'currency', currency: 'UYU' }).format(amount)
+})
 
 async function loadPayment() {
   try {
@@ -71,20 +89,15 @@ function loadPayPalScript() {
   })
 }
 
-function formatPrice(amount) {
-  return new Intl.NumberFormat('es-UY', { style: 'currency', currency: 'USD' }).format(amount)
-}
-
 async function renderPayPalButtons() {
+  const container = document.getElementById('paypal-buttons')
+  if (!container) return
+  container.innerHTML = ''
+
   await loadPayPalScript()
 
   window.paypal.Buttons({
-    style: {
-      layout: 'vertical',
-      color: 'blue',
-      shape: 'rect',
-      label: 'pay',
-    },
+    style: { layout: 'vertical', color: 'blue', shape: 'rect', label: 'pay' },
 
     async createOrder() {
       paypalLoading.value = true
@@ -101,9 +114,7 @@ async function renderPayPalButtons() {
 
     async onApprove(data) {
       try {
-        await api.post(`/payments/${payment.value.id}/paypal/capture`, {
-          order_id: data.orderID,
-        })
+        await api.post(`/payments/${payment.value.id}/paypal/capture`, { order_id: data.orderID })
         success.value = true
       } catch (e) {
         error.value = e.response?.data?.message ?? 'Error al confirmar el pago.'
@@ -123,19 +134,75 @@ async function renderPayPalButtons() {
   }).render('#paypal-buttons')
 }
 
+async function submitCardPayment() {
+  cardError.value = null
+  cardSubmitting.value = true
+
+  try {
+    await api.post(`/payments/${payment.value.id}/card`, {
+      metodo: cardForm.value.metodo,
+      numero: cardForm.value.numero.replace(/\s/g, ''),
+      titular: cardForm.value.titular.trim(),
+      vencimiento: cardForm.value.vencimiento.trim(),
+      cvv: cardForm.value.cvv.trim(),
+    })
+    success.value = true
+  } catch (e) {
+    const data = e.response?.data
+    if (data?.errors) {
+      cardError.value = Object.values(data.errors).flat().join(' ')
+    } else {
+      cardError.value = data?.message ?? 'No se pudo procesar el pago.'
+    }
+  } finally {
+    cardSubmitting.value = false
+  }
+}
+
+function formatCardNumber(value) {
+  const digits = value.replace(/\D/g, '').slice(0, 19)
+  return digits.replace(/(\d{4})(?=\d)/g, '$1 ').trim()
+}
+
+function onCardNumberUpdate(value) {
+  cardForm.value.numero = formatCardNumber(String(value))
+}
+
+function onExpiryUpdate(value) {
+  let v = String(value).replace(/\D/g, '').slice(0, 6)
+  if (v.length >= 3) v = `${v.slice(0, 2)}/${v.slice(2)}`
+  cardForm.value.vencimiento = v
+}
+
+watch(paymentMethod, async (method) => {
+  error.value = null
+  cardError.value = null
+  if (method === 'paypal' && paypalConfigured && payment.value?.estado === 'pendiente') {
+    await nextTick()
+    try {
+      await renderPayPalButtons()
+    } catch {
+      error.value = 'No se pudo cargar PayPal.'
+    }
+  }
+})
+
 onMounted(async () => {
   await loadPayment()
   if (!payment.value || payment.value.estado !== 'pendiente') return
+
   if (!paypalConfigured) {
-    error.value =
-      'PayPal Sandbox no está configurado. Agregá VITE_PAYPAL_CLIENT_ID en frontend/.env y reiniciá npm run dev.'
+    paymentMethod.value = 'card'
     return
   }
-  try {
-    await renderPayPalButtons()
-  } catch {
-    error.value =
-      'No se pudo cargar el botón de PayPal. Revisá el Client ID en frontend/.env y las credenciales en backend/.env.'
+
+  if (paymentMethod.value === 'paypal') {
+    try {
+      await nextTick()
+      await renderPayPalButtons()
+    } catch {
+      paymentMethod.value = 'card'
+    }
   }
 })
 </script>
@@ -192,36 +259,120 @@ onMounted(async () => {
               </template>
             </p>
           </div>
-          <p class="text-xl font-bold text-primary-600">{{ formatPrice(payment?.monto) }}</p>
+          <p class="text-xl font-bold text-primary-600">{{ money }}</p>
         </div>
       </AppCard>
 
-      <AppCard>
-        <p class="text-sm font-medium text-neutral-700 mb-4">Pagá con PayPal (Sandbox)</p>
-
-        <div
-          v-if="!paypalConfigured"
-          class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
+      <!-- Selector de método -->
+      <div class="flex gap-2 mb-4">
+        <button
+          type="button"
+          class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg border transition-colors cursor-pointer"
+          :class="paymentMethod === 'card'
+            ? 'border-primary-500 bg-primary-50 text-primary-700'
+            : 'border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-50'"
+          @click="paymentMethod = 'card'"
         >
-          <p class="font-medium mb-1">Falta configurar PayPal</p>
-          <p>
-            Agregá <code class="text-xs bg-amber-100 px-1 rounded">VITE_PAYPAL_CLIENT_ID</code>
-            en <code class="text-xs bg-amber-100 px-1 rounded">frontend/.env</code>
-            y reiniciá <code class="text-xs bg-amber-100 px-1 rounded">npm run dev</code>.
-          </p>
-        </div>
+          <CreditCard class="w-4 h-4" /> Tarjeta
+        </button>
+        <button
+          v-if="paypalConfigured"
+          type="button"
+          class="flex-1 px-4 py-2.5 text-sm font-medium rounded-lg border transition-colors cursor-pointer"
+          :class="paymentMethod === 'paypal'
+            ? 'border-primary-500 bg-primary-50 text-primary-700'
+            : 'border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-50'"
+          @click="paymentMethod = 'paypal'"
+        >
+          PayPal
+        </button>
+      </div>
 
-        <template v-else>
-          <div v-if="paypalLoading" class="flex justify-center py-4">
-            <AppSpinner size="md" />
+      <!-- Pago con tarjeta simulado -->
+      <AppCard v-if="paymentMethod === 'card'">
+        <p class="text-sm font-medium text-neutral-700 mb-4">Tarjeta de débito o crédito (simulado)</p>
+
+        <form class="space-y-4" @submit.prevent="submitCardPayment">
+          <div class="flex gap-2">
+            <button
+              v-for="opt in [{ value: 'tarjeta_credito', label: 'Crédito' }, { value: 'tarjeta_debito', label: 'Débito' }]"
+              :key="opt.value"
+              type="button"
+              class="px-3 py-1.5 text-sm rounded-full border transition-colors cursor-pointer"
+              :class="cardForm.metodo === opt.value
+                ? 'bg-primary-600 border-primary-600 text-white'
+                : 'border-neutral-300 text-neutral-600 hover:border-primary-400'"
+              @click="cardForm.metodo = opt.value"
+            >
+              {{ opt.label }}
+            </button>
           </div>
 
-          <div id="paypal-buttons" class="min-h-[45px]" />
+          <AppInput
+            id="card-number"
+            label="Número de tarjeta"
+            :model-value="cardForm.numero"
+            placeholder="4111 1111 1111 1111"
+            required
+            @update:model-value="onCardNumberUpdate"
+          />
 
-          <p v-if="error" class="mt-3 text-sm text-red-600 flex items-center gap-1">
-            <AlertCircle class="w-4 h-4 shrink-0" /> {{ error }}
+          <AppInput
+            id="card-holder"
+            v-model="cardForm.titular"
+            label="Titular"
+            placeholder="Como figura en la tarjeta"
+            autocomplete="cc-name"
+            required
+          />
+
+          <div class="grid grid-cols-2 gap-3">
+            <AppInput
+              id="card-expiry"
+              label="Vencimiento"
+              :model-value="cardForm.vencimiento"
+              placeholder="MM/AA"
+              required
+              @update:model-value="onExpiryUpdate"
+            />
+            <AppInput
+              id="card-cvv"
+              v-model="cardForm.cvv"
+              label="CVV"
+              type="password"
+              placeholder="123"
+              required
+            />
+          </div>
+
+          <p class="text-xs text-neutral-500 rounded-lg bg-neutral-50 border border-neutral-100 p-3">
+            <strong>Pruebas:</strong> <code class="text-[11px]">4111111111111111</code> aprueba ·
+            <code class="text-[11px]">4000000000000002</code> rechaza. No se guardan datos reales de tarjeta.
           </p>
-        </template>
+
+          <p v-if="cardError" class="text-sm text-red-600 flex items-start gap-1">
+            <AlertCircle class="w-4 h-4 shrink-0 mt-0.5" /> {{ cardError }}
+          </p>
+
+          <AppButton type="submit" variant="primary" class="w-full" :loading="cardSubmitting">
+            Pagar {{ money }}
+          </AppButton>
+        </form>
+      </AppCard>
+
+      <!-- PayPal -->
+      <AppCard v-else>
+        <p class="text-sm font-medium text-neutral-700 mb-4">Pagá con PayPal (Sandbox)</p>
+
+        <div v-if="paypalLoading" class="flex justify-center py-4">
+          <AppSpinner size="md" />
+        </div>
+
+        <div id="paypal-buttons" class="min-h-[45px]" />
+
+        <p v-if="error" class="mt-3 text-sm text-red-600 flex items-center gap-1">
+          <AlertCircle class="w-4 h-4 shrink-0" /> {{ error }}
+        </p>
       </AppCard>
     </template>
 

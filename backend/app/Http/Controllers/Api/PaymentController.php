@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Payment;
 use App\Models\User;
 use App\Services\PayPalService;
+use App\Services\SimulatedCardPaymentService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,8 +17,10 @@ use Illuminate\Support\Facades\DB;
 
 class PaymentController extends Controller
 {
-    public function __construct(private readonly PayPalService $paypal)
-    {
+    public function __construct(
+        private readonly PayPalService $paypal,
+        private readonly SimulatedCardPaymentService $cardPayment,
+    ) {
     }
 
     /**
@@ -146,29 +149,81 @@ class PaymentController extends Controller
         DB::transaction(function () use ($payment, $capture) {
             $captureDetail = $capture['purchase_units'][0]['payments']['captures'][0] ?? [];
 
-            $payment->update([
-                'estado' => PaymentStatus::Completado,
-                'metodo' => PaymentMethod::Paypal,
-                'fecha_pago' => Carbon::now(),
-                'referencia_pasarela' => $captureDetail['id'] ?? $capture['id'],
-            ]);
-
-            $booking = $payment->booking;
-            if ($booking && in_array($booking->estado, [BookingStatus::Pendiente, BookingStatus::Confirmada])) {
-                $booking->update(['estado' => BookingStatus::Pagada]);
-            }
+            $this->completarPago(
+                $payment,
+                PaymentMethod::Paypal,
+                $captureDetail['id'] ?? $capture['id'],
+            );
         });
 
         return response()->json([
             'message' => 'Pago completado exitosamente.',
-            'payment' => [
-                'id' => $payment->id,
-                'estado' => PaymentStatus::Completado->value,
-                'monto' => (float) $payment->monto,
-                'metodo' => PaymentMethod::Paypal->value,
-                'fecha_pago' => $payment->fecha_pago?->toIso8601String(),
-                'referencia_pasarela' => $payment->referencia_pasarela,
-            ],
+            'payment' => $this->formatPaymentResponse($payment->fresh()),
         ]);
+    }
+
+    /**
+     * Pago simulado con tarjeta de débito o crédito (sin pasarela real).
+     */
+    public function processCard(Request $request, int $paymentId): JsonResponse
+    {
+        $datos = $request->validate([
+            'metodo' => ['required', 'in:tarjeta_debito,tarjeta_credito'],
+            'numero' => ['required', 'string', 'max:24'],
+            'titular' => ['required', 'string', 'max:120'],
+            'vencimiento' => ['required', 'string', 'max:7'],
+            'cvv' => ['required', 'string', 'max:4'],
+        ]);
+
+        $payment = Payment::with(['booking', 'booking.client', 'packagePurchase'])->findOrFail($paymentId);
+
+        $usuario = $request->user();
+        $this->autorizarPagoCliente($payment, $usuario);
+
+        abort_unless(
+            $payment->estado === PaymentStatus::Pendiente,
+            422,
+            'Este pago ya fue procesado.'
+        );
+
+        $resultado = $this->cardPayment->authorize($datos);
+
+        DB::transaction(function () use ($payment, $resultado) {
+            $this->completarPago($payment, $resultado['metodo'], $resultado['referencia']);
+        });
+
+        return response()->json([
+            'message' => 'Pago con tarjeta completado exitosamente.',
+            'payment' => $this->formatPaymentResponse($payment->fresh()),
+            'ultimos_cuatro' => $resultado['ultimos_cuatro'],
+        ]);
+    }
+
+    private function completarPago(Payment $payment, PaymentMethod $metodo, string $referencia): void
+    {
+        $payment->update([
+            'estado' => PaymentStatus::Completado,
+            'metodo' => $metodo,
+            'fecha_pago' => Carbon::now(),
+            'referencia_pasarela' => $referencia,
+        ]);
+
+        $booking = $payment->booking;
+        if ($booking && in_array($booking->estado, [BookingStatus::Pendiente, BookingStatus::Confirmada], true)) {
+            $booking->update(['estado' => BookingStatus::Pagada]);
+        }
+    }
+
+    /** @return array<string, mixed> */
+    private function formatPaymentResponse(Payment $payment): array
+    {
+        return [
+            'id' => $payment->id,
+            'estado' => $payment->estado->value,
+            'monto' => (float) $payment->monto,
+            'metodo' => $payment->metodo?->value,
+            'fecha_pago' => $payment->fecha_pago?->toIso8601String(),
+            'referencia_pasarela' => $payment->referencia_pasarela,
+        ];
     }
 }

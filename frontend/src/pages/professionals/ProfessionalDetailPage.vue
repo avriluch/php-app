@@ -172,6 +172,9 @@ onMounted(async () => {
         <p class="text-sm text-neutral-600">
           {{ professional.agenda_resumen.horario_inicio }} – {{ professional.agenda_resumen.horario_fin }}
           · buffer {{ professional.agenda_resumen.buffer_minutos }} min
+          <span v-if="professional.agenda_resumen.pausa_entre_sesiones_minutos">
+            · pausa {{ professional.agenda_resumen.pausa_entre_sesiones_minutos }} min
+          </span>
         </p>
       </AppCard>
 

@@ -7,6 +7,7 @@ use App\Enums\NotificationType;
 use App\Jobs\EnviarRecordatorioReserva;
 use App\Models\Booking;
 use App\Models\Notification;
+use App\Models\PlatformSetting;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 
@@ -19,14 +20,16 @@ use Illuminate\Console\Command;
 class EnviarRecordatoriosReservas extends Command
 {
     protected $signature = 'bookings:enviar-recordatorios
-        {--horas=24 : Ventana en horas para considerar "próxima" la reserva}
+        {--horas= : Ventana en horas para considerar "próxima" la reserva}
         {--tolerancia=1 : Tolerancia adicional en horas (para no perder turnos por desfasaje del scheduler)}';
 
     protected $description = 'Despacha recordatorios para reservas próximas (T+~24h por defecto).';
 
     public function handle(): int
     {
-        $horas = (int) $this->option('horas');
+        $horas = $this->option('horas') !== null
+            ? (int) $this->option('horas')
+            : (int) PlatformSetting::current()->recordatorio_horas_antes;
         $tolerancia = (int) $this->option('tolerancia');
 
         $desde = Carbon::now()->addHours($horas - $tolerancia);

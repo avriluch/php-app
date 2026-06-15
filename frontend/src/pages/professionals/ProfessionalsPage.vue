@@ -1,13 +1,14 @@
 <script setup>
 import { ref, reactive, watch, onMounted, computed } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { Search, SlidersHorizontal, Star, MapPin, X, ChevronDown } from '@lucide/vue'
+import { Search, SlidersHorizontal, Star, MapPin, X, ChevronDown, LocateFixed, Navigation } from '@lucide/vue'
 import api from '@/services/api'
 import AppButton from '@/components/ui/AppButton.vue'
 import AppCard from '@/components/ui/AppCard.vue'
 import AppBadge from '@/components/ui/AppBadge.vue'
 import AppAvatar from '@/components/ui/AppAvatar.vue'
 import AppSpinner from '@/components/ui/AppSpinner.vue'
+import ProfessionalsMap from '@/components/ui/ProfessionalsMap.vue'
 
 const loading = ref(false)
 const error = ref(null)
@@ -26,11 +27,34 @@ const filters = reactive({
   ciudad: '',
   rating_min: '',
   sort: 'rating',
+  lat: null,
+  lng: null,
+  radius_km: 25,
 })
 
-const activeFilterCount = computed(() =>
-  Object.entries(filters).filter(([k, v]) => v && !(k === 'sort' && v === 'rating')).length
+const geoLoading = ref(false)
+const geoError = ref(null)
+const proximityActive = computed(() => filters.lat != null && filters.lng != null)
+
+const mapProfessionals = computed(() =>
+  professionals.value.filter(
+    (p) => p.ubicacion?.latitud != null && p.ubicacion?.longitud != null,
+  ),
 )
+
+const showMap = computed(() => proximityActive.value || mapProfessionals.value.length > 0)
+const mapGroupedLocations = ref(0)
+
+const activeFilterCount = computed(() => {
+  let count = Object.entries(filters).filter(([k, v]) => {
+    if (k === 'sort' && v === 'rating') return false
+    if (k === 'radius_km') return false
+    if (k === 'lat' || k === 'lng') return false
+    return Boolean(v)
+  }).length
+  if (proximityActive.value) count += 1
+  return count
+})
 
 function buildParams() {
   const p = {}
@@ -42,6 +66,12 @@ function buildParams() {
   if (filters.ciudad.trim()) p.ciudad = filters.ciudad.trim()
   if (filters.rating_min) p.rating_min = filters.rating_min
   if (filters.sort) p.sort = filters.sort
+  if (proximityActive.value) {
+    p.lat = filters.lat
+    p.lng = filters.lng
+    p.radius_km = filters.radius_km
+    p.per_page = 50
+  }
   return p
 }
 
@@ -68,6 +98,46 @@ function clearFilters() {
   filters.ciudad = ''
   filters.rating_min = ''
   filters.sort = 'rating'
+  filters.lat = null
+  filters.lng = null
+  filters.radius_km = 25
+  geoError.value = null
+}
+
+function useMyLocation() {
+  geoError.value = null
+  if (!navigator.geolocation) {
+    geoError.value = 'Tu navegador no soporta geolocalización.'
+    return
+  }
+  geoLoading.value = true
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      filters.lat = pos.coords.latitude
+      filters.lng = pos.coords.longitude
+      if (filters.sort === 'rating') filters.sort = 'distance'
+      geoLoading.value = false
+      fetchProfessionals()
+    },
+    () => {
+      geoError.value = 'No se pudo obtener tu ubicación. Revisá los permisos del navegador.'
+      geoLoading.value = false
+    },
+    { enableHighAccuracy: true, timeout: 10000 },
+  )
+}
+
+function clearProximity() {
+  filters.lat = null
+  filters.lng = null
+  filters.radius_km = 25
+  geoError.value = null
+  if (filters.sort === 'distance') filters.sort = 'rating'
+}
+
+function formatDistance(km) {
+  if (km == null) return ''
+  return km < 1 ? `${Math.round(km * 1000)} m` : `${km} km`
 }
 
 let debounceTimer = null
@@ -238,12 +308,58 @@ function modalidadLabel(m) {
           </div>
         </div>
 
+        <!-- Cercanía -->
+        <div class="sm:col-span-2 lg:col-span-3">
+          <label class="block text-xs font-semibold text-neutral-600 mb-1.5 uppercase tracking-wide">Cercanía</label>
+          <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+            <AppButton
+              variant="outline"
+              size="sm"
+              :loading="geoLoading"
+              @click="useMyLocation"
+            >
+              <LocateFixed class="w-4 h-4" />
+              {{ proximityActive ? 'Actualizar ubicación' : 'Usar mi ubicación' }}
+            </AppButton>
+
+            <div v-if="proximityActive" class="flex flex-1 flex-col sm:flex-row sm:items-center gap-3">
+              <label class="flex items-center gap-2 text-sm text-neutral-600 flex-1">
+                <Navigation class="w-4 h-4 text-primary-500 shrink-0" />
+                <span class="shrink-0">Radio: {{ filters.radius_km }} km</span>
+                <input
+                  v-model.number="filters.radius_km"
+                  type="range"
+                  min="1"
+                  max="100"
+                  step="1"
+                  class="w-full accent-primary-600"
+                />
+              </label>
+              <button
+                type="button"
+                class="text-sm text-neutral-500 hover:text-neutral-700 flex items-center gap-1 cursor-pointer shrink-0"
+                @click="clearProximity"
+              >
+                <X class="w-4 h-4" /> Quitar cercanía
+              </button>
+            </div>
+          </div>
+          <p v-if="geoError" class="text-xs text-red-600 mt-2">{{ geoError }}</p>
+          <p v-else-if="proximityActive" class="text-xs text-neutral-500 mt-2">
+            Mostrando profesionales a hasta {{ filters.radius_km }} km de tu ubicación.
+          </p>
+        </div>
+
         <!-- Ordenar -->
         <div>
           <label class="block text-xs font-semibold text-neutral-600 mb-1.5 uppercase tracking-wide">Ordenar por</label>
-          <div class="flex gap-2">
+          <div class="flex flex-wrap gap-2">
             <button
-              v-for="opt in [{ value: 'rating', label: '⭐ Calificación' }, { value: 'price', label: '💲 Precio' }]"
+              v-for="opt in [
+                { value: 'rating', label: '⭐ Calificación' },
+                { value: 'price', label: '💲 Precio' },
+                ...(proximityActive ? [{ value: 'distance', label: '📍 Cercanía' }] : []),
+              ]"
               :key="opt.value"
               class="px-3 py-1 text-sm rounded-full border transition-colors cursor-pointer"
               :class="filters.sort === opt.value
@@ -268,6 +384,48 @@ function modalidadLabel(m) {
         </button>
       </div>
     </div>
+
+    <!-- Mapa de profesionales -->
+    <AppCard v-if="showMap && !loading && !error" class="mb-6 overflow-hidden" padding="none">
+      <div class="px-4 py-3 border-b border-neutral-100 flex flex-wrap items-center justify-between gap-2">
+        <h2 class="font-semibold text-neutral-900 text-sm flex items-center gap-2">
+          <MapPin class="w-4 h-4 text-primary-500" />
+          {{ proximityActive ? 'Profesionales cerca de vos' : 'Mapa de profesionales' }}
+        </h2>
+        <span class="text-xs text-neutral-500">
+          <template v-if="proximityActive">
+            Radio {{ filters.radius_km }} km · {{ mapProfessionals.length }} profesional{{ mapProfessionals.length !== 1 ? 'es' : '' }}
+            <template v-if="mapGroupedLocations > 0">
+              · {{ mapGroupedLocations }} zona{{ mapGroupedLocations !== 1 ? 's' : '' }} con varios en la misma dirección
+            </template>
+          </template>
+          <template v-else>
+            {{ mapProfessionals.length }} con ubicación
+          </template>
+        </span>
+      </div>
+      <p
+        v-if="mapGroupedLocations > 0"
+        class="px-4 py-2 text-xs text-neutral-500 bg-neutral-50 border-b border-neutral-100"
+      >
+        Varios profesionales comparten la misma ciudad en el sistema: en el mapa se muestran separados alrededor del punto. Tocá el círculo con el número para ver la lista completa.
+      </p>
+      <ProfessionalsMap
+        v-if="proximityActive || mapProfessionals.length > 0"
+        :professionals="mapProfessionals"
+        :user-lat="proximityActive ? filters.lat : null"
+        :user-lng="proximityActive ? filters.lng : null"
+        :radius-km="proximityActive ? filters.radius_km : null"
+        alto="380px"
+        @grouped-count="mapGroupedLocations = $event"
+      />
+      <p
+        v-if="proximityActive && mapProfessionals.length === 0"
+        class="px-4 py-6 text-sm text-neutral-500 text-center border-t border-neutral-100"
+      >
+        No hay profesionales con ubicación en este radio. Probá ampliar la distancia o quitá otros filtros.
+      </p>
+    </AppCard>
 
     <!-- Resultados -->
     <div v-if="loading" class="flex justify-center py-20">
@@ -315,6 +473,9 @@ function modalidadLabel(m) {
             >
               <MapPin class="w-3.5 h-3.5 shrink-0" />
               {{ pro.ubicacion.ciudad }}, {{ pro.ubicacion.pais }}
+              <span v-if="pro.distance_km != null" class="text-primary-600 font-medium">
+                · {{ formatDistance(pro.distance_km) }}
+              </span>
             </p>
             <div class="flex flex-wrap gap-1 mt-3">
               <AppBadge

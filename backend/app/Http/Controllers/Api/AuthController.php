@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Resources\UserResource;
+use App\Models\PlatformSetting;
 use App\Models\ProfessionalProfile;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -20,6 +21,14 @@ class AuthController extends Controller
 {
     public function register(RegisterRequest $request): JsonResponse
     {
+        $settings = PlatformSetting::current();
+
+        if (! $settings->registro_abierto) {
+            throw ValidationException::withMessages([
+                'email' => ['El registro de nuevas cuentas está temporalmente cerrado.'],
+            ]);
+        }
+
         $data = $request->validated();
 
         $user = DB::transaction(function () use ($data) {

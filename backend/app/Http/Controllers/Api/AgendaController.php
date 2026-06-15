@@ -24,6 +24,7 @@ class AgendaController extends Controller
                 'horario_fin' => substr($agenda->horario_fin, 0, 5),
                 'dias_disponibles' => array_map('intval', $agenda->dias_disponibles ?? []),
                 'buffer_minutos' => (int) $agenda->buffer_minutos,
+                'pausa_entre_sesiones_minutos' => (int) $agenda->pausa_entre_sesiones_minutos,
                 'exceptions' => $agenda->exceptions->map(fn ($e) => [
                     'id' => $e->id,
                     'fecha' => $e->fecha->toDateString(),
@@ -44,6 +45,7 @@ class AgendaController extends Controller
             'dias_disponibles' => ['required', 'array', 'min:1'],
             'dias_disponibles.*' => ['integer', 'between:0,6'],
             'buffer_minutos' => ['required', 'integer', 'between:0,240'],
+            'pausa_entre_sesiones_minutos' => ['required', 'integer', 'between:0,240'],
         ]);
 
         $agenda = Agenda::updateOrCreate(
@@ -53,6 +55,7 @@ class AgendaController extends Controller
                 'horario_fin' => $datos['horario_fin'] . ':00',
                 'dias_disponibles' => array_values(array_unique(array_map('intval', $datos['dias_disponibles']))),
                 'buffer_minutos' => $datos['buffer_minutos'],
+                'pausa_entre_sesiones_minutos' => $datos['pausa_entre_sesiones_minutos'],
             ],
         );
 
@@ -63,6 +66,7 @@ class AgendaController extends Controller
                 'horario_fin' => substr($agenda->horario_fin, 0, 5),
                 'dias_disponibles' => array_map('intval', $agenda->dias_disponibles),
                 'buffer_minutos' => (int) $agenda->buffer_minutos,
+                'pausa_entre_sesiones_minutos' => (int) $agenda->pausa_entre_sesiones_minutos,
             ],
         ]);
     }

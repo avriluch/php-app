@@ -136,7 +136,7 @@ const router = createRouter({
             import('@/pages/dashboard/professional/ProfessionalSchedulePage.vue'),
           meta: {
             pageTitle: 'Agenda',
-            pageDescription: 'Horarios, buffers y excepciones (feriados).',
+            pageDescription: 'Horarios, buffer, pausas y excepciones (feriados).',
           },
         },
         {
@@ -225,7 +225,7 @@ const router = createRouter({
         {
           path: 'settings',
           name: 'admin-settings',
-          component: placeholder,
+          component: () => import('@/pages/admin/AdminSettingsPage.vue'),
           meta: { pageTitle: 'Configuración', pageDescription: 'Ajustes del sistema.' },
         },
       ],

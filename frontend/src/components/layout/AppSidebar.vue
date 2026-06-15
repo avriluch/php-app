@@ -36,6 +36,7 @@ const navByRole = {
   admin: [
     { label: 'Panel', to: '/admin', icon: LayoutDashboard },
     { label: 'Usuarios', to: '/admin/users', icon: Users },
+    { label: 'Configuración', to: '/admin/settings', icon: Settings },
   ],
 }
 

@@ -1,9 +1,10 @@
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter, useRoute, RouterLink } from 'vue-router'
 import { User, Briefcase } from '@lucide/vue'
 import AppButton from '@/components/ui/AppButton.vue'
 import AppInput from '@/components/ui/AppInput.vue'
+import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -12,6 +13,8 @@ const route = useRoute()
 
 const loading = ref(false)
 const step = ref(1)
+const registroAbierto = ref(true)
+const plataforma = ref('ServiConnect')
 
 const form = reactive({
   name: '',
@@ -96,6 +99,16 @@ const handleSubmit = async () => {
 const oauthLogin = (provider) => {
   window.location.href = `${import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api'}/auth/${provider}/redirect`
 }
+
+onMounted(async () => {
+  try {
+    const { data } = await api.get('/platform-settings')
+    registroAbierto.value = data.registro_abierto !== false
+    plataforma.value = data.nombre_plataforma || 'ServiConnect'
+  } catch {
+    registroAbierto.value = true
+  }
+})
 </script>
 
 <template>
@@ -103,8 +116,16 @@ const oauthLogin = (provider) => {
     <h1 class="text-2xl font-bold text-neutral-900 mb-1">Creá tu cuenta</h1>
     <p class="text-sm text-neutral-500 mb-6">Es gratis y lleva menos de 2 minutos</p>
 
+    <div
+      v-if="!registroAbierto"
+      class="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+    >
+      El registro en {{ plataforma }} está temporalmente cerrado. Si ya tenés cuenta, podés
+      <RouterLink to="/login" class="font-medium underline">iniciar sesión</RouterLink>.
+    </div>
+
     <!-- Step 1: tipo de cuenta -->
-    <div v-if="step === 1">
+    <div v-if="step === 1 && registroAbierto">
       <p class="text-sm font-medium text-neutral-700 mb-3">¿Cómo vas a usar ServiConnect?</p>
 
       <div class="grid grid-cols-2 gap-3 mb-6">
@@ -160,7 +181,7 @@ const oauthLogin = (provider) => {
     </div>
 
     <!-- Step 2: datos personales -->
-    <div v-else>
+    <div v-else-if="registroAbierto">
       <button class="flex items-center gap-1 text-sm text-neutral-500 hover:text-neutral-700 mb-5 cursor-pointer" @click="step = 1">
         ← Volver
       </button>

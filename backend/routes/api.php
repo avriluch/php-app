@@ -10,7 +10,7 @@ use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\MeController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PackagePurchaseController;
-use App\Http\Controllers\Api\PaymentController;
+use App\Http\Controllers\Api\PlatformSettingController;
 use App\Http\Controllers\Api\ProfessionalClientController;
 use App\Http\Controllers\Api\ProfessionalController;
 use App\Http\Controllers\Api\ReviewController;
@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', fn () => response()->json(['status' => 'ok']));
+Route::get('/platform-settings', [PlatformSettingController::class, 'show']);
 
 Route::prefix('auth')->group(function () {
     Route::get('/google/redirect', [GoogleAuthController::class, 'redirect']);
@@ -67,6 +68,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:client')->group(function () {
         Route::post('/payments/{id}/paypal/create-order', [PaymentController::class, 'createPayPalOrder'])->whereNumber('id');
         Route::post('/payments/{id}/paypal/capture', [PaymentController::class, 'capturePayPalOrder'])->whereNumber('id');
+        Route::post('/payments/{id}/card', [PaymentController::class, 'processCard'])->whereNumber('id');
     });
 
     // Reseñas
@@ -116,5 +118,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/users/{id}/status', [AdminController::class, 'updateUserStatus'])->whereNumber('id');
         Route::get('/metrics', [AdminController::class, 'metrics']);
         Route::get('/activity', [AdminController::class, 'activity']);
+        Route::get('/settings', [AdminController::class, 'settings']);
+        Route::put('/settings', [AdminController::class, 'updateSettings']);
     });
 });
