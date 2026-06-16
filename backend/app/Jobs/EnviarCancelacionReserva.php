@@ -53,7 +53,7 @@ class EnviarCancelacionReserva implements ShouldQueue
                 'fecha_envio' => Carbon::now(),
             ]);
 
-            $brevoMail->sendView(
+            $brevoMail->send(
                 $cliente->email,
                 'Reserva cancelada',
                 'emails.reserva_cancelada',
@@ -80,7 +80,7 @@ class EnviarCancelacionReserva implements ShouldQueue
                 'fecha_envio' => Carbon::now(),
             ]);
 
-            $brevoMail->sendView(
+            $brevoMail->send(
                 $profUser->email,
                 'Reserva cancelada',
                 'emails.reserva_cancelada',
