@@ -3,14 +3,13 @@
 namespace App\Jobs;
 
 use App\Enums\NotificationType;
-use App\Mail\ReservaCanceladaMail;
 use App\Models\Booking;
 use App\Models\Notification;
 use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Foundation\Queue\Queueable;
-use Illuminate\Support\Facades\Mail;
+use App\Services\BrevoMailService;
 
 class EnviarCancelacionReserva implements ShouldQueue
 {
@@ -36,6 +35,8 @@ class EnviarCancelacionReserva implements ShouldQueue
         $cliente = $reserva->client;
         $fechaFormateada = $reserva->fecha_hora?->format('d/m/Y H:i');
 
+        $brevoMail = app(BrevoMailService::class);
+
         if ($cliente) {
             Notification::create([
                 'user_id' => $cliente->id,
@@ -45,7 +46,12 @@ class EnviarCancelacionReserva implements ShouldQueue
                 'fecha_envio' => Carbon::now(),
             ]);
 
-            Mail::to($cliente->email)->send(new ReservaCanceladaMail($reserva, 'cliente'));
+            $brevoMail->send(
+                $cliente->email,
+                'Reserva cancelada',
+                'mail.reserva-cancelada',
+                ['reserva' => $reserva, 'destinatario' => 'cliente'],
+            );
         }
 
         if ($profUser) {
@@ -58,7 +64,12 @@ class EnviarCancelacionReserva implements ShouldQueue
                 'fecha_envio' => Carbon::now(),
             ]);
 
-            Mail::to($profUser->email)->send(new ReservaCanceladaMail($reserva, 'profesional'));
+            $brevoMail->send(
+                $profUser->email,
+                'Reserva cancelada',
+                'mail.reserva-cancelada',
+                ['reserva' => $reserva, 'destinatario' => 'profesional'],
+            );
         }
     }
 }

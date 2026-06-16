@@ -3,14 +3,13 @@
 namespace App\Jobs;
 
 use App\Enums\NotificationType;
-use App\Mail\ReservaRecordatorioMail;
 use App\Models\Booking;
 use App\Models\Notification;
 use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Foundation\Queue\Queueable;
-use Illuminate\Support\Facades\Mail;
+use App\Services\BrevoMailService;
 
 /**
  * Recordatorio único al cliente para una reserva próxima.
@@ -46,6 +45,11 @@ class EnviarRecordatorioReserva implements ShouldQueue
             'fecha_envio' => Carbon::now(),
         ]);
 
-        Mail::to($reserva->client->email)->send(new ReservaRecordatorioMail($reserva));
+        app(BrevoMailService::class)->send(
+            $reserva->client->email,
+            'Recordatorio: tu reserva es mañana',
+            'mail.reserva-recordatorio',
+            ['reserva' => $reserva],
+        );
     }
 }

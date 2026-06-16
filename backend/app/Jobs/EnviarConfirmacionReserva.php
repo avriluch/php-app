@@ -4,7 +4,6 @@ namespace App\Jobs;
 
 use App\Enums\NotificationType;
 use App\Events\NuevaReservaProfesional;
-use App\Mail\ReservaCreadaMail;
 use App\Models\Booking;
 use App\Models\Notification;
 use Carbon\Carbon;
@@ -12,7 +11,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
+use App\Services\BrevoMailService;
 
 /**
  * Notifica al cliente y al profesional sobre una reserva recién creada.
@@ -43,6 +42,8 @@ class EnviarConfirmacionReserva implements ShouldQueue
         $cliente = $reserva->client;
         $fechaFormateada = $reserva->fecha_hora?->format('d/m/Y H:i');
 
+        $brevoMail = app(BrevoMailService::class);
+
         // Notificación + email al cliente
         if ($cliente) {
             Notification::create([
@@ -54,7 +55,12 @@ class EnviarConfirmacionReserva implements ShouldQueue
                 'fecha_envio' => Carbon::now(),
             ]);
 
-            Mail::to($cliente->email)->send(new ReservaCreadaMail($reserva, 'cliente'));
+            $brevoMail->send(
+                $cliente->email,
+                'Reserva confirmada con ' . ($profUser?->nombre ?? 'tu profesional'),
+                'mail.reserva-creada',
+                ['reserva' => $reserva, 'destinatario' => 'cliente'],
+            );
         }
 
         // Notificación + email al profesional
@@ -68,7 +74,12 @@ class EnviarConfirmacionReserva implements ShouldQueue
                 'fecha_envio' => Carbon::now(),
             ]);
 
-            Mail::to($profUser->email)->send(new ReservaCreadaMail($reserva, 'profesional'));
+            $brevoMail->send(
+                $profUser->email,
+                'Nueva reserva: ' . ($cliente?->nombre ?? 'Cliente') . ' ' . ($cliente?->apellido ?? ''),
+                'mail.reserva-creada',
+                ['reserva' => $reserva, 'destinatario' => 'profesional'],
+            );
 
             // Transmite en vivo al canal privado del profesional (WebSocket vía Reverb).
             // Best-effort: si Reverb no está disponible, no debe romper el job
