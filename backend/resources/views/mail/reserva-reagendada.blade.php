@@ -6,31 +6,72 @@
     $nombreSaludo = $esProfesional ? $profUser?->nombre : $cliente?->nombre;
 @endphp
 
-<x-mail::message>
-# Reserva reagendada
+<div style="font-family: Arial, sans-serif; color:#333; line-height:1.5;">
 
-Hola {{ $nombreSaludo }},
+    <h2 style="color:#16A34A;">
+        Reserva reagendada
+    </h2>
 
-@if ($esProfesional)
-La reserva de **{{ $cliente?->nombre }} {{ $cliente?->apellido }}** fue reagendada.
-@else
-Tu reserva con **{{ $profUser?->nombre }} {{ $profUser?->apellido }}** fue reagendada.
-@endif
+    <p>Hola {{ $nombreSaludo }},</p>
 
-<x-mail::panel>
-**Servicio:** {{ $servicio?->nombre }}
-@if ($fechaAnterior)
-**Fecha y hora anterior:** {{ $fechaAnterior }}
-@endif
-**Nueva fecha y hora:** {{ $reserva->fecha_hora?->format('d/m/Y H:i') }}
-**Modalidad:** {{ ucfirst($reserva->modalidad->value) }}
-**Duración:** {{ $servicio?->duracion }} minutos
-**Estado:** {{ ucfirst($reserva->estado->value) }}
-</x-mail::panel>
+    @if ($esProfesional)
+        <p>
+            La reserva de
+            <strong>{{ $cliente?->nombre }} {{ $cliente?->apellido }}</strong>
+            fue reagendada.
+        </p>
+    @else
+        <p>
+            Tu reserva con
+            <strong>{{ $profUser?->nombre }} {{ $profUser?->apellido }}</strong>
+            fue reagendada.
+        </p>
+    @endif
 
-<x-mail::button :url="config('app.frontend_url') . '/dashboard/' . ($esProfesional ? 'professional' : 'client')">
-Ver detalles
-</x-mail::button>
+    <!-- PANEL -->
+    <div style="border:1px solid #e5e5e5; border-radius:8px; padding:15px; margin:20px 0; background:#f9f9f9;">
 
-Gracias por usar {{ config('app.name') }}.
-</x-mail::message>
+        <p><strong>Servicio:</strong> {{ $servicio?->nombre }}</p>
+
+        @if ($fechaAnterior)
+            <p><strong>Fecha y hora anterior:</strong> {{ $fechaAnterior }}</p>
+        @endif
+
+        <p><strong>Nueva fecha y hora:</strong>
+            {{ $reserva->fecha_hora?->format('d/m/Y H:i') }}
+        </p>
+
+        <p><strong>Modalidad:</strong>
+            {{ ucfirst($reserva->modalidad->value) }}
+        </p>
+
+        <p><strong>Duración:</strong>
+            {{ $servicio?->duracion }} minutos
+        </p>
+
+        <p><strong>Estado:</strong>
+            {{ ucfirst($reserva->estado->value) }}
+        </p>
+
+    </div>
+
+    <!-- BOTÓN -->
+    <div style="margin:30px 0;">
+        <a href="{{ config('app.frontend_url') . '/dashboard/' . ($esProfesional ? 'professional' : 'client') }}"
+           style="
+                background:#16A34A;
+                color:white;
+                padding:12px 20px;
+                text-decoration:none;
+                border-radius:6px;
+                display:inline-block;
+           ">
+            Ver detalles
+        </a>
+    </div>
+
+    <p style="margin-top:30px;">
+        Gracias por usar <strong>{{ config('app.name') }}</strong>.
+    </p>
+
+</div>

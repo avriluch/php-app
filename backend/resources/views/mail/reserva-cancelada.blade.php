@@ -6,33 +6,71 @@
     $nombreSaludo = $esProfesional ? $profUser?->nombre : $cliente?->nombre;
 @endphp
 
-<x-mail::message>
-# Reserva cancelada
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Reserva cancelada</title>
+</head>
 
-Hola {{ $nombreSaludo }},
+<body style="font-family: Arial, sans-serif; background:#f6f6f6; padding:20px;">
 
-@if ($esProfesional)
-La reserva de **{{ $cliente?->nombre }} {{ $cliente?->apellido }}** fue cancelada.
-@else
-Tu reserva con **{{ $profUser?->nombre }} {{ $profUser?->apellido }}** quedó cancelada.
-@endif
+<div style="max-width:600px; margin:auto; background:#ffffff; padding:20px; border-radius:10px;">
 
-<x-mail::panel>
-**Servicio:** {{ $servicio?->nombre }}
-**Fecha y hora original:** {{ $reserva->fecha_hora?->format('d/m/Y H:i') }}
-**Cancelada el:** {{ $reserva->cancelled_at?->format('d/m/Y H:i') }}
-@if ($reserva->cancel_motivo)
-**Motivo:** {{ $reserva->cancel_motivo }}
-@endif
-</x-mail::panel>
+    <h2 style="color:#dc2626;">
+        Reserva cancelada
+    </h2>
 
-@if (! $esProfesional)
-Si querés, podés reservar un nuevo turno desde la plataforma.
-@endif
+    <p>Hola <strong>{{ $nombreSaludo }}</strong>,</p>
 
-<x-mail::button :url="config('app.frontend_url') . '/professionals'">
-Buscar profesionales
-</x-mail::button>
+    @if ($esProfesional)
+        <p>
+            La reserva de <strong>{{ $cliente?->nombre }} {{ $cliente?->apellido }}</strong>
+            fue cancelada.
+        </p>
+    @else
+        <p>
+            Tu reserva con <strong>{{ $profUser?->nombre }} {{ $profUser?->apellido }}</strong>
+            quedó cancelada.
+        </p>
+    @endif
 
-Gracias por usar {{ config('app.name') }}.
-</x-mail::message>
+    <div style="border:1px solid #ddd; padding:15px; border-radius:8px; margin-top:15px;">
+
+        <p><strong>Servicio:</strong> {{ $servicio?->nombre }}</p>
+
+        <p><strong>Fecha y hora original:</strong>
+            {{ $reserva->fecha_hora?->format('d/m/Y H:i') }}
+        </p>
+
+        <p><strong>Cancelada el:</strong>
+            {{ $reserva->cancelled_at?->format('d/m/Y H:i') }}
+        </p>
+
+        @if ($reserva->cancel_motivo)
+            <p><strong>Motivo:</strong> {{ $reserva->cancel_motivo }}</p>
+        @endif
+
+    </div>
+
+    @if (! $esProfesional)
+        <p style="margin-top:15px;">
+            Si querés, podés reservar un nuevo turno desde la plataforma.
+        </p>
+    @endif
+
+    <div style="margin-top:20px;">
+        <a href="{{ config('app.frontend_url') }}/professionals"
+           style="background:#2563eb; color:#fff; padding:10px 15px; text-decoration:none; border-radius:5px;">
+            Buscar profesionales
+        </a>
+    </div>
+
+    <p style="margin-top:30px; font-size:12px; color:#777;">
+        Gracias por usar {{ config('app.name') }}.
+    </p>
+
+</div>
+
+</body>
+</html>

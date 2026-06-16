@@ -6,32 +6,76 @@
     $nombreSaludo = $esProfesional ? $profUser?->nombre : $cliente?->nombre;
 @endphp
 
-<x-mail::message>
-# {{ $esProfesional ? 'Nueva reserva' : '¡Reserva creada!' }}
+<div style="font-family: Arial, sans-serif; color:#333; line-height:1.5;">
 
-Hola {{ $nombreSaludo }},
+    <h2 style="color:#16A34A;">
+        {{ $esProfesional ? 'Nueva reserva' : '¡Reserva creada!' }}
+    </h2>
 
-@if ($esProfesional)
-**{{ $cliente?->nombre }} {{ $cliente?->apellido }}** reservó una sesión contigo.
-@else
-Te confirmamos que tu reserva con **{{ $profUser?->nombre }} {{ $profUser?->apellido }}** quedó registrada.
-@endif
+    <p>Hola {{ $nombreSaludo }},</p>
 
-<x-mail::panel>
-**Servicio:** {{ $servicio?->nombre }}
-**Fecha y hora:** {{ $reserva->fecha_hora?->format('d/m/Y H:i') }}
-**Modalidad:** {{ ucfirst($reserva->modalidad->value) }}
-**Duración:** {{ $servicio?->duracion }} minutos
-**Estado:** {{ ucfirst($reserva->estado->value) }}
-</x-mail::panel>
+    @if ($esProfesional)
+        <p>
+            <strong>{{ $cliente?->nombre }} {{ $cliente?->apellido }}</strong>
+            reservó una sesión contigo.
+        </p>
+    @else
+        <p>
+            Te confirmamos que tu reserva con
+            <strong>{{ $profUser?->nombre }} {{ $profUser?->apellido }}</strong>
+            quedó registrada.
+        </p>
+    @endif
 
-@if (! $esProfesional && $reserva->payment && $reserva->payment->estado->value === 'pendiente')
-Tu pago de **\${{ number_format((float) $reserva->payment->monto, 2, ',', '.') }}** está pendiente. Podés completarlo desde el panel.
-@endif
+    <!-- PANEL -->
+    <div style="border:1px solid #e5e5e5; border-radius:8px; padding:15px; margin:20px 0; background:#f9f9f9;">
 
-<x-mail::button :url="config('app.frontend_url') . '/dashboard/' . ($esProfesional ? 'professional' : 'client')">
-Ver detalles
-</x-mail::button>
+        <p><strong>Servicio:</strong> {{ $servicio?->nombre }}</p>
 
-Gracias por usar {{ config('app.name') }}.
-</x-mail::message>
+        <p><strong>Fecha y hora:</strong>
+            {{ $reserva->fecha_hora?->format('d/m/Y H:i') }}
+        </p>
+
+        <p><strong>Modalidad:</strong>
+            {{ ucfirst($reserva->modalidad->value) }}
+        </p>
+
+        <p><strong>Duración:</strong>
+            {{ $servicio?->duracion }} minutos
+        </p>
+
+        <p><strong>Estado:</strong>
+            {{ ucfirst($reserva->estado->value) }}
+        </p>
+
+    </div>
+
+    @if (! $esProfesional && $reserva->payment && $reserva->payment->estado->value === 'pendiente')
+        <p style="color:#b45309;">
+            Tu pago de <strong>
+                ${{ number_format((float) $reserva->payment->monto, 2, ',', '.') }}
+            </strong>
+            está pendiente. Podés completarlo desde el panel.
+        </p>
+    @endif
+
+    <!-- BOTÓN -->
+    <div style="margin:30px 0;">
+        <a href="{{ config('app.frontend_url') . '/dashboard/' . ($esProfesional ? 'professional' : 'client') }}"
+           style="
+                background:#16A34A;
+                color:white;
+                padding:12px 20px;
+                text-decoration:none;
+                border-radius:6px;
+                display:inline-block;
+           ">
+            Ver detalles
+        </a>
+    </div>
+
+    <p style="margin-top:30px;">
+        Gracias por usar <strong>{{ config('app.name') }}</strong>.
+    </p>
+
+</div>
