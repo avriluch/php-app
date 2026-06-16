@@ -56,7 +56,7 @@ class EnviarCancelacionReserva implements ShouldQueue
             $brevoMail->send(
                 $cliente->email,
                 'Reserva cancelada',
-                'emails.reserva_cancelada',
+                'mail.reserva-cancelada',
                 [
                     'reserva' => $reserva,
                     'destinatario' => 'cliente',
@@ -83,7 +83,7 @@ class EnviarCancelacionReserva implements ShouldQueue
             $brevoMail->send(
                 $profUser->email,
                 'Reserva cancelada',
-                'emails.reserva_cancelada',
+                'mail.reserva-cancelada',
                 [
                     'reserva' => $reserva,
                     'destinatario' => 'profesional',
