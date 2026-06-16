@@ -9,7 +9,7 @@ use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Foundation\Queue\Queueable;
-use App\Services\BrevoService;
+use App\Services\BrevoMailService;
 
 class EnviarReagendacionReserva implements ShouldQueue
 {
@@ -33,20 +33,13 @@ class EnviarReagendacionReserva implements ShouldQueue
             return;
         }
 
-        $cliente = $reserva->client;
         $profUser = $reserva->professionalProfile?->user;
-
+        $cliente = $reserva->client;
         $fechaFormateada = $reserva->fecha_hora?->format('d/m/Y H:i');
 
-        $brevo = app(BrevoService::class);
+        $brevoMail = app(BrevoMailService::class);
 
-        /*
-        |-----------------------------------------
-        | CLIENTE
-        |-----------------------------------------
-        */
         if ($cliente) {
-
             Notification::create([
                 'user_id' => $cliente->id,
                 'booking_id' => $reserva->id,
@@ -55,25 +48,15 @@ class EnviarReagendacionReserva implements ShouldQueue
                 'fecha_envio' => Carbon::now(),
             ]);
 
-            $brevo->sendView(
+            $brevoMail->send(
                 $cliente->email,
                 'Reserva reagendada',
-                'emails.reserva_reagendada',
-                [
-                    'reserva' => $reserva,
-                    'destinatario' => 'cliente',
-                    'fechaAnterior' => $this->fechaAnterior,
-                ]
+                'mail.reserva-reagendada',
+                ['reserva' => $reserva, 'destinatario' => 'cliente', 'fechaAnterior' => $this->fechaAnterior],
             );
         }
 
-        /*
-        |-----------------------------------------
-        | PROFESIONAL
-        |-----------------------------------------
-        */
         if ($profUser) {
-
             Notification::create([
                 'user_id' => $profUser->id,
                 'booking_id' => $reserva->id,
@@ -82,15 +65,11 @@ class EnviarReagendacionReserva implements ShouldQueue
                 'fecha_envio' => Carbon::now(),
             ]);
 
-            $brevo->sendView(
+            $brevoMail->send(
                 $profUser->email,
                 'Reserva reagendada',
-                'emails.reserva_reagendada',
-                [
-                    'reserva' => $reserva,
-                    'destinatario' => 'profesional',
-                    'fechaAnterior' => $this->fechaAnterior,
-                ]
+                'mail.reserva-reagendada',
+                ['reserva' => $reserva, 'destinatario' => 'profesional', 'fechaAnterior' => $this->fechaAnterior],
             );
         }
     }

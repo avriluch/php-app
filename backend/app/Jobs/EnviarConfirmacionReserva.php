@@ -11,8 +11,12 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
-use App\Services\BrevoService;
+use App\Services\BrevoMailService;
 
+/**
+ * Notifica al cliente y al profesional sobre una reserva recién creada.
+ * Persiste registros en `notifications` y envía email a ambos.
+ */
 class EnviarConfirmacionReserva implements ShouldQueue
 {
     use Dispatchable, Queueable;
@@ -34,20 +38,14 @@ class EnviarConfirmacionReserva implements ShouldQueue
             return;
         }
 
-        $cliente = $reserva->client;
         $profUser = $reserva->professionalProfile?->user;
-
+        $cliente = $reserva->client;
         $fechaFormateada = $reserva->fecha_hora?->format('d/m/Y H:i');
 
-        $brevo = app(BrevoService::class);
+        $brevoMail = app(BrevoMailService::class);
 
-        /*
-        |-----------------------------------------
-        | CLIENTE
-        |-----------------------------------------
-        */
+        // Notificación + email al cliente
         if ($cliente) {
-
             Notification::create([
                 'user_id' => $cliente->id,
                 'booking_id' => $reserva->id,
@@ -57,24 +55,16 @@ class EnviarConfirmacionReserva implements ShouldQueue
                 'fecha_envio' => Carbon::now(),
             ]);
 
-            $brevo->sendView(
+            $brevoMail->send(
                 $cliente->email,
-                'Reserva confirmada',
-                'emails.reserva_creada',
-                [
-                    'reserva' => $reserva,
-                    'destinatario' => 'cliente',
-                ]
+                'Reserva confirmada con ' . ($profUser?->nombre ?? 'tu profesional'),
+                'mail.reserva-creada',
+                ['reserva' => $reserva, 'destinatario' => 'cliente'],
             );
         }
 
-        /*
-        |-----------------------------------------
-        | PROFESIONAL
-        |-----------------------------------------
-        */
+        // Notificación + email al profesional
         if ($profUser) {
-
             Notification::create([
                 'user_id' => $profUser->id,
                 'booking_id' => $reserva->id,
@@ -84,27 +74,20 @@ class EnviarConfirmacionReserva implements ShouldQueue
                 'fecha_envio' => Carbon::now(),
             ]);
 
-            $brevo->sendView(
+            $brevoMail->send(
                 $profUser->email,
                 'Nueva reserva: ' . ($cliente?->nombre ?? 'Cliente') . ' ' . ($cliente?->apellido ?? ''),
-                'emails.reserva_creada',
-                [
-                    'reserva' => $reserva,
-                    'destinatario' => 'profesional',
-                ]
+                'mail.reserva-creada',
+                ['reserva' => $reserva, 'destinatario' => 'profesional'],
             );
 
-            /*
-            |-----------------------------------------
-            | EVENTO EN TIEMPO REAL (Reverb)
-            |-----------------------------------------
-            */
+            // Transmite en vivo al canal privado del profesional (WebSocket vía Reverb).
+            // Best-effort: si Reverb no está disponible, no debe romper el job
+            // (los emails y notificaciones ya se enviaron; reintentarlo los duplicaría).
             try {
                 NuevaReservaProfesional::dispatch($reserva);
             } catch (\Throwable $e) {
-                Log::warning(
-                    'No se pudo transmitir NuevaReservaProfesional: ' . $e->getMessage()
-                );
+                Log::warning('No se pudo transmitir NuevaReservaProfesional: ' . $e->getMessage());
             }
         }
     }

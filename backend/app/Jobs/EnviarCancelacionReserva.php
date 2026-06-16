@@ -3,13 +3,14 @@
 namespace App\Jobs;
 
 use App\Enums\NotificationType;
+use App\Mail\ReservaCanceladaMail;
 use App\Models\Booking;
 use App\Models\Notification;
 use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Foundation\Queue\Queueable;
-use App\Services\BrevoService;
+use Illuminate\Support\Facades\Mail;
 
 class EnviarCancelacionReserva implements ShouldQueue
 {
@@ -33,18 +34,9 @@ class EnviarCancelacionReserva implements ShouldQueue
 
         $profUser = $reserva->professionalProfile?->user;
         $cliente = $reserva->client;
-
         $fechaFormateada = $reserva->fecha_hora?->format('d/m/Y H:i');
 
-        $brevo = app(BrevoService::class);
-
-        /*
-        |-----------------------------------------
-        | CLIENTE
-        |-----------------------------------------
-        */
         if ($cliente) {
-
             Notification::create([
                 'user_id' => $cliente->id,
                 'booking_id' => $reserva->id,
@@ -53,24 +45,10 @@ class EnviarCancelacionReserva implements ShouldQueue
                 'fecha_envio' => Carbon::now(),
             ]);
 
-            $brevo->sendView(
-                $cliente->email,
-                'Reserva cancelada',
-                'emails.reserva_cancelada',
-                [
-                    'reserva' => $reserva,
-                    'destinatario' => 'cliente',
-                ]
-            );
+            Mail::to($cliente->email)->send(new ReservaCanceladaMail($reserva, 'cliente'));
         }
 
-        /*
-        |-----------------------------------------
-        | PROFESIONAL
-        |-----------------------------------------
-        */
         if ($profUser) {
-
             Notification::create([
                 'user_id' => $profUser->id,
                 'booking_id' => $reserva->id,
@@ -80,15 +58,7 @@ class EnviarCancelacionReserva implements ShouldQueue
                 'fecha_envio' => Carbon::now(),
             ]);
 
-            $brevo->sendView(
-                $profUser->email,
-                'Reserva cancelada',
-                'emails.reserva_cancelada',
-                [
-                    'reserva' => $reserva,
-                    'destinatario' => 'profesional',
-                ]
-            );
+            Mail::to($profUser->email)->send(new ReservaCanceladaMail($reserva, 'profesional'));
         }
     }
 }
