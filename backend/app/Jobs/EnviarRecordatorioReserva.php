@@ -9,12 +9,8 @@ use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Foundation\Queue\Queueable;
-use App\Services\BrevoMailService;
+use App\Services\BrevoService;
 
-/**
- * Recordatorio único al cliente para una reserva próxima.
- * Lo despacha el command `bookings:enviar-recordatorios`.
- */
 class EnviarRecordatorioReserva implements ShouldQueue
 {
     use Dispatchable, Queueable;
@@ -31,25 +27,65 @@ class EnviarRecordatorioReserva implements ShouldQueue
             'service',
         ])->find($this->reservaId);
 
-        if (! $reserva || ! $reserva->client) {
+        if (! $reserva) {
             return;
         }
 
-        $fechaFormateada = $reserva->fecha_hora?->format('d/m/Y H:i');
+        $cliente = $reserva->client;
+        $profUser = $reserva->professionalProfile?->user;
 
-        Notification::create([
-            'user_id' => $reserva->client->id,
-            'booking_id' => $reserva->id,
-            'tipo' => NotificationType::Recordatorio,
-            'mensaje' => 'Recordatorio: tu sesión del ' . $fechaFormateada . ' es mañana.',
-            'fecha_envio' => Carbon::now(),
-        ]);
+        $brevo = app(BrevoService::class);
 
-        app(BrevoMailService::class)->send(
-            $reserva->client->email,
-            'Recordatorio: tu reserva es mañana',
-            'mail.reserva-recordatorio',
-            ['reserva' => $reserva],
-        );
+        /*
+        |-----------------------------------------
+        | CLIENTE
+        |-----------------------------------------
+        */
+        if ($cliente) {
+
+            Notification::create([
+                'user_id' => $cliente->id,
+                'booking_id' => $reserva->id,
+                'tipo' => NotificationType::Recordatorio,
+                'mensaje' => 'Tenés una sesión próxima el ' 
+                    . $reserva->fecha_hora?->format('d/m/Y H:i') . '.',
+                'fecha_envio' => Carbon::now(),
+            ]);
+
+            $brevo->sendView(
+                $cliente->email,
+                'Recordatorio de tu reserva',
+                'emails.recordatorio_reserva',
+                [
+                    'reserva' => $reserva,
+                ]
+            );
+        }
+
+        /*
+        |-----------------------------------------
+        | PROFESIONAL
+        |-----------------------------------------
+        */
+        if ($profUser) {
+
+            Notification::create([
+                'user_id' => $profUser->id,
+                'booking_id' => $reserva->id,
+                'tipo' => NotificationType::Recordatorio,
+                'mensaje' => 'Tenés una sesión programada el ' 
+                    . $reserva->fecha_hora?->format('d/m/Y H:i') . '.',
+                'fecha_envio' => Carbon::now(),
+            ]);
+
+            $brevo->sendView(
+                $profUser->email,
+                'Recordatorio de sesión',
+                'emails.recordatorio_reserva',
+                [
+                    'reserva' => $reserva,
+                ]
+            );
+        }
     }
 }

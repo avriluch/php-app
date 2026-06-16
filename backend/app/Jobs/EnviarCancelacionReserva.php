@@ -9,7 +9,7 @@ use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Foundation\Queue\Queueable;
-use App\Services\BrevoMailService;
+use App\Services\BrevoService;
 
 class EnviarCancelacionReserva implements ShouldQueue
 {
@@ -33,11 +33,18 @@ class EnviarCancelacionReserva implements ShouldQueue
 
         $profUser = $reserva->professionalProfile?->user;
         $cliente = $reserva->client;
+
         $fechaFormateada = $reserva->fecha_hora?->format('d/m/Y H:i');
 
-        $brevoMail = app(BrevoMailService::class);
+        $brevo = app(BrevoService::class);
 
+        /*
+        |-----------------------------------------
+        | CLIENTE
+        |-----------------------------------------
+        */
         if ($cliente) {
+
             Notification::create([
                 'user_id' => $cliente->id,
                 'booking_id' => $reserva->id,
@@ -46,15 +53,24 @@ class EnviarCancelacionReserva implements ShouldQueue
                 'fecha_envio' => Carbon::now(),
             ]);
 
-            $brevoMail->send(
+            $brevo->sendView(
                 $cliente->email,
                 'Reserva cancelada',
-                'mail.reserva-cancelada',
-                ['reserva' => $reserva, 'destinatario' => 'cliente'],
+                'emails.reserva_cancelada',
+                [
+                    'reserva' => $reserva,
+                    'destinatario' => 'cliente',
+                ]
             );
         }
 
+        /*
+        |-----------------------------------------
+        | PROFESIONAL
+        |-----------------------------------------
+        */
         if ($profUser) {
+
             Notification::create([
                 'user_id' => $profUser->id,
                 'booking_id' => $reserva->id,
@@ -64,11 +80,14 @@ class EnviarCancelacionReserva implements ShouldQueue
                 'fecha_envio' => Carbon::now(),
             ]);
 
-            $brevoMail->send(
+            $brevo->sendView(
                 $profUser->email,
                 'Reserva cancelada',
-                'mail.reserva-cancelada',
-                ['reserva' => $reserva, 'destinatario' => 'profesional'],
+                'emails.reserva_cancelada',
+                [
+                    'reserva' => $reserva,
+                    'destinatario' => 'profesional',
+                ]
             );
         }
     }
