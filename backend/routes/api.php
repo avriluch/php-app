@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\ProfessionalClientController;
 use App\Http\Controllers\Api\ProfessionalController;
 use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\ServiceController;
+use App\Http\Controllers\Api\PaymentController;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
 
