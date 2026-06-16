@@ -36,7 +36,7 @@ class EnviarCancelacionReserva implements ShouldQueue
 
         $fechaFormateada = $reserva->fecha_hora?->format('d/m/Y H:i');
 
-        $brevo = app(BrevoService::class);
+        $brevoMail = app(BrevoMailService::class);
 
         /*
         |-----------------------------------------
@@ -53,7 +53,7 @@ class EnviarCancelacionReserva implements ShouldQueue
                 'fecha_envio' => Carbon::now(),
             ]);
 
-            $brevo->sendView(
+            $brevoMail->sendView(
                 $cliente->email,
                 'Reserva cancelada',
                 'emails.reserva_cancelada',
@@ -80,7 +80,7 @@ class EnviarCancelacionReserva implements ShouldQueue
                 'fecha_envio' => Carbon::now(),
             ]);
 
-            $brevo->sendView(
+            $brevoMail->sendView(
                 $profUser->email,
                 'Reserva cancelada',
                 'emails.reserva_cancelada',
