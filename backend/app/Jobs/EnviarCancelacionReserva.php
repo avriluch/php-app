@@ -9,7 +9,7 @@ use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Foundation\Queue\Queueable;
-use App\Services\BrevoService;
+use App\Services\BrevoMailService;
 
 class EnviarCancelacionReserva implements ShouldQueue
 {
