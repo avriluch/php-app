@@ -12,6 +12,7 @@ class ProfessionalProfile extends Model
     protected $fillable = [
         'user_id',
         'titulo',
+        'categoria',
         'descripcion',
         'cancelacion_horas_minimas',
         'location_id',

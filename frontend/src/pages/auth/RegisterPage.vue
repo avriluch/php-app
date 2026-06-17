@@ -6,6 +6,7 @@ import AppButton from '@/components/ui/AppButton.vue'
 import AppInput from '@/components/ui/AppInput.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { PROFESSIONAL_CATEGORIES } from '@/constants/professionalCategories'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -17,14 +18,19 @@ const registroAbierto = ref(true)
 const plataforma = ref('ServiConnect')
 
 const form = reactive({
-  name: '',
+  nombre: '',
+  apellido: '',
   email: '',
   password: '',
   password_confirmation: '',
   role: route.query.role === 'professional' ? 'professional' : '',
+  titulo: '',
+  categoria: '',
 })
 
-const errors = reactive({ name: '', email: '', password: '', password_confirmation: '', role: '', general: '' })
+const categories = PROFESSIONAL_CATEGORIES
+
+const errors = reactive({ nombre: '', apellido: '', email: '', password: '', password_confirmation: '', role: '', titulo: '', categoria: '', general: '' })
 
 const validateStep1 = () => {
   errors.role = form.role ? '' : 'Seleccioná un tipo de cuenta'
@@ -32,11 +38,17 @@ const validateStep1 = () => {
 }
 
 const validateStep2 = () => {
-  errors.name = form.name.trim() ? '' : 'El nombre es requerido'
+  errors.nombre = form.nombre.trim() ? '' : 'El nombre es requerido'
+  errors.apellido = form.apellido.trim() ? '' : 'El apellido es requerido'
   errors.email = form.email ? '' : 'El email es requerido'
   errors.password = form.password.length >= 8 ? '' : 'Mínimo 8 caracteres'
   errors.password_confirmation = form.password === form.password_confirmation ? '' : 'Las contraseñas no coinciden'
-  return !errors.name && !errors.email && !errors.password && !errors.password_confirmation
+  if (form.role === 'professional') {
+    errors.categoria = form.categoria ? '' : 'Seleccioná una categoría'
+    errors.titulo = form.titulo.trim() ? '' : 'Indicá tu título o especialidad'
+  }
+  return !errors.nombre && !errors.apellido && !errors.email && !errors.password && !errors.password_confirmation
+    && !errors.categoria && !errors.titulo
 }
 
 const nextStep = () => {
@@ -44,7 +56,8 @@ const nextStep = () => {
 }
 
 function limpiarErroresApi() {
-  errors.name = ''
+  errors.nombre = ''
+  errors.apellido = ''
   errors.email = ''
   errors.password = ''
   errors.password_confirmation = ''
@@ -59,18 +72,19 @@ function aplicarErroresApi(apiErrors) {
     return Array.isArray(msg) ? msg[0] : msg
   }
 
-  if (primero('nombre') || primero('apellido')) {
-    errors.name = primero('nombre') || primero('apellido')
-  }
+  if (primero('nombre')) errors.nombre = primero('nombre')
+  if (primero('apellido')) errors.apellido = primero('apellido')
   if (primero('email')) errors.email = primero('email')
   if (primero('password')) errors.password = primero('password')
   if (primero('password_confirmation')) errors.password_confirmation = primero('password_confirmation')
   if (primero('role')) errors.role = primero('role')
+  if (primero('categoria')) errors.categoria = primero('categoria')
+  if (primero('titulo')) errors.titulo = primero('titulo')
 
   // Evitar duplicar el mismo texto bajo el campo y en "general"
   const todos = Object.values(apiErrors).flat().filter(Boolean)
   const yaMostradoEnCampo =
-    errors.email || errors.name || errors.password || errors.password_confirmation || errors.role
+    errors.email || errors.nombre || errors.apellido || errors.password || errors.password_confirmation || errors.role
   if (todos.length && !yaMostradoEnCampo) errors.general = todos[0]
 }
 
@@ -81,7 +95,7 @@ const handleSubmit = async () => {
   try {
     await auth.register(form)
     if (form.role === 'professional') {
-      router.push('/dashboard/professional')
+      router.push('/dashboard/professional/schedule')
     } else {
       router.push('/dashboard/client')
     }
@@ -187,14 +201,24 @@ onMounted(async () => {
       </button>
 
       <form class="flex flex-col gap-4" @submit.prevent="handleSubmit">
-        <AppInput
-          id="name"
-          v-model="form.name"
-          label="Nombre completo"
-          placeholder="Juan García"
-          :error="errors.name"
-          required
-        />
+        <div class="grid gap-4 sm:grid-cols-2">
+          <AppInput
+            id="nombre"
+            v-model="form.nombre"
+            label="Nombre"
+            placeholder="Juan"
+            :error="errors.nombre"
+            required
+          />
+          <AppInput
+            id="apellido"
+            v-model="form.apellido"
+            label="Apellido"
+            placeholder="García"
+            :error="errors.apellido"
+            required
+          />
+        </div>
         <AppInput
           id="email"
           v-model="form.email"
@@ -222,6 +246,33 @@ onMounted(async () => {
           :error="errors.password_confirmation"
           required
         />
+
+        <template v-if="form.role === 'professional'">
+          <div class="flex flex-col gap-1">
+            <label for="categoria" class="text-sm font-medium text-neutral-700">Categoría *</label>
+            <select
+              id="categoria"
+              v-model="form.categoria"
+              class="w-full px-3 py-2 text-sm rounded-lg border border-neutral-300 bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+              required
+            >
+              <option value="" disabled>Elegí tu rubro</option>
+              <option v-for="cat in categories" :key="cat.value" :value="cat.value">
+                {{ cat.emoji }} {{ cat.label }}
+              </option>
+            </select>
+            <p v-if="errors.categoria" class="text-xs text-red-600">{{ errors.categoria }}</p>
+          </div>
+
+          <AppInput
+            id="titulo"
+            v-model="form.titulo"
+            label="Título / especialidad *"
+            placeholder="Ej: Nutricionista deportiva"
+            :error="errors.titulo"
+            required
+          />
+        </template>
 
         <p v-if="errors.general" class="text-sm text-red-600 text-center">{{ errors.general }}</p>
         <p

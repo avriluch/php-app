@@ -14,7 +14,12 @@ return [
 
     'from' => [
         'address' => env('MAIL_FROM_ADDRESS', 'hello@example.com'),
-        'name' => env('MAIL_FROM_NAME', 'ServiciosPro'),
+        // Railway no expande "${APP_NAME}"; si queda literal, usamos APP_NAME de Laravel.
+        'name' => match (true) {
+            blank($name = env('MAIL_FROM_NAME')) => config('app.name'),
+            str_contains($name, '${') => config('app.name'),
+            default => $name,
+        },
     ],
 
 ];

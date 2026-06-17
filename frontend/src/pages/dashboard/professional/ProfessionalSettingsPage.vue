@@ -2,6 +2,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import api from '@/services/api'
 import { useUIStore } from '@/stores/ui'
+import { PROFESSIONAL_CATEGORIES } from '@/constants/professionalCategories'
 import AppCard from '@/components/ui/AppCard.vue'
 import AppInput from '@/components/ui/AppInput.vue'
 import AppButton from '@/components/ui/AppButton.vue'
@@ -15,19 +16,25 @@ const error = ref(null)
 
 const form = reactive({
   titulo: '',
+  categoria: '',
   descripcion: '',
   cancelacion_horas_minimas: 0,
 })
-const errors = reactive({ titulo: '', cancelacion_horas_minimas: '' })
+const errors = reactive({ titulo: '', categoria: '', cancelacion_horas_minimas: '' })
+
+function applyProfile(data) {
+  form.titulo = data.titulo ?? ''
+  form.categoria = data.categoria ?? ''
+  form.descripcion = data.descripcion ?? ''
+  form.cancelacion_horas_minimas = data.cancelacion_horas_minimas ?? 0
+}
 
 async function load() {
   loading.value = true
   error.value = null
   try {
     const { data } = await api.get('/professional/profile')
-    form.titulo = data.titulo ?? ''
-    form.descripcion = data.descripcion ?? ''
-    form.cancelacion_horas_minimas = data.cancelacion_horas_minimas ?? 0
+    applyProfile(data)
   } catch (e) {
     error.value = e.response?.data?.message ?? 'No se pudo cargar el perfil.'
   } finally {
@@ -37,10 +44,15 @@ async function load() {
 
 function validar() {
   errors.titulo = ''
+  errors.categoria = ''
   errors.cancelacion_horas_minimas = ''
   let ok = true
   if (!form.titulo.trim()) {
     errors.titulo = 'El título es requerido.'
+    ok = false
+  }
+  if (!form.categoria) {
+    errors.categoria = 'Seleccioná una categoría.'
     ok = false
   }
   const horas = Number(form.cancelacion_horas_minimas)
@@ -55,16 +67,21 @@ async function guardar() {
   if (!validar()) return
   saving.value = true
   try {
-    await api.put('/professional/profile', {
+    const { data } = await api.put('/professional/profile', {
       titulo: form.titulo.trim(),
+      categoria: form.categoria,
       descripcion: form.descripcion.trim() || null,
       cancelacion_horas_minimas: Number(form.cancelacion_horas_minimas),
     })
+    if (data.profile) {
+      applyProfile(data.profile)
+    }
     ui.toast.success('Perfil actualizado.')
   } catch (e) {
     if (e.response?.status === 422 && e.response.data?.errors) {
       const apiErrors = e.response.data.errors
       errors.titulo = apiErrors.titulo?.[0] ?? ''
+      errors.categoria = apiErrors.categoria?.[0] ?? ''
       errors.cancelacion_horas_minimas = apiErrors.cancelacion_horas_minimas?.[0] ?? ''
     }
     ui.toast.error(e.response?.data?.message ?? 'No se pudo guardar.')
@@ -91,6 +108,23 @@ onMounted(load)
 
     <AppCard v-else>
       <form class="space-y-5" @submit.prevent="guardar">
+        <div class="flex flex-col gap-1">
+          <label for="categoria" class="text-sm font-medium text-neutral-700">Categoría *</label>
+          <select
+            id="categoria"
+            v-model="form.categoria"
+            class="w-full px-3 py-2 text-sm rounded-lg border border-neutral-300 bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+            required
+          >
+            <option value="" disabled>Elegí tu rubro</option>
+            <option v-for="cat in PROFESSIONAL_CATEGORIES" :key="cat.value" :value="cat.value">
+              {{ cat.emoji }} {{ cat.label }}
+            </option>
+          </select>
+          <p v-if="errors.categoria" class="text-xs text-red-600">{{ errors.categoria }}</p>
+          <p class="text-xs text-neutral-400">Aparece en búsquedas y filtros por categoría.</p>
+        </div>
+
         <AppInput
           id="titulo"
           v-model="form.titulo"

@@ -10,6 +10,7 @@ use App\Models\Service;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 /**
  * CRUD del profesional sobre sus propios servicios.
@@ -37,6 +38,14 @@ class ServiceController extends Controller
     {
         $perfil = $request->user()->professionalProfile;
         abort_unless($perfil, 404, 'Perfil profesional no encontrado.');
+
+        if (! $perfil->agenda()->exists()) {
+            throw ValidationException::withMessages([
+                'agenda' => [
+                    'Configurá tu agenda antes de publicar servicios. Sin horarios definidos, los clientes no pueden reservar turnos.',
+                ],
+            ]);
+        }
 
         $datos = $this->validarPayload($request);
 

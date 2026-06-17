@@ -45,6 +45,7 @@ class AuthController extends Controller
                 ProfessionalProfile::create([
                     'user_id' => $user->id,
                     'titulo' => $data['titulo'] ?? 'Profesional',
+                    'categoria' => $data['categoria'] ?? null,
                     'descripcion' => $data['descripcion'] ?? null,
                 ]);
             }
@@ -97,7 +98,7 @@ class AuthController extends Controller
 
         $datos = $request->validate([
             'nombre' => ['sometimes', 'string', 'max:100'],
-            'apellido' => ['sometimes', 'string', 'max:100'],
+            'apellido' => ['sometimes', 'required', 'string', 'max:100'],
             'telefono' => ['sometimes', 'nullable', 'string', 'max:30'],
             'foto_perfil' => ['sometimes', 'nullable', 'string', 'max:500'],
             'email' => ['sometimes', 'email', 'max:150', 'unique:users,email,' . $usuario->id],

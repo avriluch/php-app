@@ -42,6 +42,7 @@ class RegisterRequest extends FormRequest
             'telefono' => ['nullable', 'string', 'max:30'],
             'role' => ['required', Rule::in(array_column(UserRole::cases(), 'value'))],
             'titulo' => ['required_if:role,professional', 'nullable', 'string', 'max:150'],
+            'categoria' => ['required_if:role,professional', 'nullable', 'string', Rule::in(array_keys(config('professional_categories')))],
             'descripcion' => ['nullable', 'string', 'max:2000'],
         ];
     }
@@ -58,6 +59,8 @@ class RegisterRequest extends FormRequest
             'password.confirmed' => 'Las contraseñas no coinciden.',
             'role.required' => 'Seleccioná si sos cliente o profesional.',
             'titulo.required_if' => 'Indicá un título profesional.',
+            'categoria.required_if' => 'Seleccioná una categoría.',
+            'categoria.in' => 'La categoría seleccionada no es válida.',
         ];
     }
 }

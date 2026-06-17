@@ -17,4 +17,8 @@ return [
         'api_key' => env('LIVEKIT_API_KEY'),
         'api_secret' => env('LIVEKIT_API_SECRET'),
     ],
+
+    'brevo' => [
+        'api_key' => env('BREVO_API_KEY'),
+    ],
 ];

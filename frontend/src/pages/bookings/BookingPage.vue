@@ -32,6 +32,8 @@ const slots = ref([])
 const slotsLoading = ref(false)
 const selectedSlot = ref(null)
 const selectedModalidad = ref('')
+const sinAgenda = ref(false)
+const availabilityMessage = ref('')
 
 const today = new Date().toISOString().split('T')[0]
 
@@ -109,11 +111,15 @@ watch(selectedDate, async (date) => {
   if (!date || !selectedService.value) return
   slots.value = []
   selectedSlot.value = null
+  sinAgenda.value = false
+  availabilityMessage.value = ''
   slotsLoading.value = true
   try {
     const { data } = await api.get(`/professionals/${professionalId}/availability`, {
       params: { service_id: selectedService.value.id, from: date, to: date },
     })
+    sinAgenda.value = Boolean(data.sin_agenda)
+    availabilityMessage.value = data.mensaje ?? ''
     const ahora = Date.now()
     slots.value = (data.slots ?? []).map((slot) => ({
       ...slot,
@@ -277,6 +283,9 @@ onMounted(loadData)
           <div v-if="slotsLoading" class="flex justify-center py-8">
             <AppSpinner size="md" />
           </div>
+          <p v-else-if="sinAgenda" class="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-center">
+            {{ availabilityMessage || 'Este profesional aún no tiene horarios configurados.' }}
+          </p>
           <p v-else-if="slots.length === 0" class="text-sm text-neutral-500 text-center py-6">
             No hay horarios disponibles para este día.
           </p>

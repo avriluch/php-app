@@ -40,6 +40,7 @@ Migrar y datos demo:
 
 ```powershell
 php artisan migrate --seed
+php artisan storage:link
 php artisan serve
 ```
 
@@ -115,13 +116,55 @@ notifications
 
 Enums en `app/Enums/`. Modelos en `app/Models/`.
 
-## Colas (cuando implementen emails)
+## Colas (emails y notificaciones)
+
+Los emails de reserva se encolan (`ShouldQueue`). **Sin un worker activo, no se envían.**
 
 ```powershell
-php artisan queue:table
-php artisan migrate
+# Terminal aparte mientras desarrollás
 php artisan queue:work
+
+# Recordatorios T+24h (scheduler)
+php artisan schedule:work
 ```
+
+WebSockets en tiempo real (Reverb):
+
+```powershell
+php artisan reverb:start
+```
+
+## Despliegue en Railway
+
+El servicio web **solo** atiende HTTP. Para emails, recordatorios y WebSockets necesitás **servicios adicionales** (mismo repo, distinto *Start Command*):
+
+| Servicio | Start Command |
+|----------|---------------|
+| **API (web)** | `php artisan storage:link --force && php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=$PORT` |
+| **Worker (colas)** | `php artisan queue:work --sleep=3 --tries=3 --max-time=3600` |
+| **Scheduler** | `php artisan schedule:work` |
+| **Reverb (opcional)** | `php artisan reverb:start --host=0.0.0.0 --port=$PORT` |
+
+Variables críticas en Railway:
+
+```
+BREVO_API_KEY=...                    # obligatorio para emails
+MAIL_FROM_ADDRESS=...                # debe estar verificado como remitente en Brevo
+QUEUE_CONNECTION=database
+BROADCAST_CONNECTION=reverb          # no uses "log" si querés WebSockets
+SANCTUM_STATEFUL_DOMAINS=frontend-production-08bf.up.railway.app,localhost,localhost:5173
+```
+
+En el **frontend** de Railway agregá las vars Reverb apuntando al servicio Reverb público:
+
+```
+VITE_REVERB_APP_KEY=<mismo que REVERB_APP_KEY del backend>
+VITE_REVERB_HOST=<host público del servicio Reverb>
+VITE_REVERB_PORT=443
+VITE_REVERB_SCHEME=https
+```
+
+Si no levantás Reverb, los emails igual pueden funcionar con el **worker**; los WebSockets en vivo no.
 
 ## Comandos útiles
 

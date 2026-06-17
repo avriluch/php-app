@@ -18,6 +18,10 @@ class ProfessionalDetailResource extends JsonResource
             'nombre' => $user->nombre,
             'apellido' => $user->apellido,
             'titulo' => $this->titulo,
+            'categoria' => $this->categoria,
+            'categoria_label' => $this->categoria
+                ? (config('professional_categories')[$this->categoria] ?? $this->categoria)
+                : null,
             'descripcion' => $this->descripcion,
             'foto_perfil' => ProfilePhotoUrl::resolve($user->foto_perfil),
             'telefono' => $user->telefono,

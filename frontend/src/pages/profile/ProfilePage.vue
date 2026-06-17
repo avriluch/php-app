@@ -199,9 +199,7 @@ async function onAvatarSelected(event) {
   avatarLoading.value = true
   try {
     await auth.uploadAvatar(file)
-    if (!auth.user?.foto_perfil) {
-      await auth.fetchMe()
-    }
+    await auth.fetchMe()
     revocarPreview()
     success.value = true
   } catch (e) {

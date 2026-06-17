@@ -1,6 +1,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { Plus, Pencil, Power, X, Save, Briefcase } from '@lucide/vue'
+import { RouterLink } from 'vue-router'
+import { Plus, Pencil, Power, X, Save, Briefcase, Clock, AlertTriangle } from '@lucide/vue'
 import api from '@/services/api'
 import AppCard from '@/components/ui/AppCard.vue'
 import AppButton from '@/components/ui/AppButton.vue'
@@ -23,6 +24,7 @@ const cargando = ref(true)
 const guardando = ref(false)
 const error = ref(null)
 const mensajeOk = ref(null)
+const tieneAgenda = ref(true)
 
 const servicios = ref([])
 const ubicaciones = ref([])
@@ -58,12 +60,14 @@ async function cargar() {
   cargando.value = true
   error.value = null
   try {
-    const [resServ, resLoc] = await Promise.all([
+    const [resServ, resLoc, resAgenda] = await Promise.all([
       api.get('/professional/services'),
       api.get('/professional/locations'),
+      api.get('/professional/agenda'),
     ])
     servicios.value = resServ.data.data ?? []
     ubicaciones.value = resLoc.data.data ?? []
+    tieneAgenda.value = Boolean(resAgenda.data.agenda)
   } catch (e) {
     error.value = e.response?.data?.message ?? 'No se pudieron cargar los servicios.'
   } finally {
@@ -72,6 +76,10 @@ async function cargar() {
 }
 
 function abrirNuevo() {
+  if (!tieneAgenda.value) {
+    error.value = 'Primero configurá tu agenda en «Mi agenda y horarios». Sin horarios, los clientes no pueden reservar.'
+    return
+  }
   Object.assign(formulario, formularioVacio())
   editandoId.value = null
   erroresForm.value = {}
@@ -159,6 +167,9 @@ async function guardar() {
   } catch (e) {
     if (e.response?.status === 422) {
       erroresForm.value = e.response.data.errors ?? {}
+      if (e.response.data.errors?.agenda?.[0]) {
+        error.value = e.response.data.errors.agenda[0]
+      }
     } else {
       error.value = e.response?.data?.message ?? 'No se pudo guardar el servicio.'
     }
@@ -218,6 +229,25 @@ onMounted(cargar)
     </div>
 
     <template v-else>
+      <div
+        v-if="!tieneAgenda"
+        class="mb-4 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-900 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+      >
+        <div class="flex items-start gap-2">
+          <AlertTriangle class="w-5 h-5 shrink-0 mt-0.5" />
+          <p>
+            <strong>Configurá tu agenda antes de publicar servicios.</strong>
+            Sin horarios disponibles, los clientes no podrán reservar turnos.
+          </p>
+        </div>
+        <RouterLink
+          to="/dashboard/professional/schedule"
+          class="inline-flex items-center gap-1 text-sm font-medium text-amber-900 underline shrink-0"
+        >
+          <Clock class="w-4 h-4" /> Ir a mi agenda
+        </RouterLink>
+      </div>
+
       <div
         v-if="error"
         class="mb-4 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700"

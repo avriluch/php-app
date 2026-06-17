@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Calendar, BarChart2, Star, Clock, ChevronRight, Video, Play } from '@lucide/vue'
+import { Calendar, BarChart2, Star, Clock, ChevronRight, Video, Play, AlertTriangle } from '@lucide/vue'
 import api from '@/services/api'
 import AppCard from '@/components/ui/AppCard.vue'
 import AppSpinner from '@/components/ui/AppSpinner.vue'
@@ -23,6 +23,8 @@ const stats = ref([
 const ratingTotal = ref(0)
 const turnosHoy = ref([])
 const porEstado = ref({})
+const tieneAgenda = ref(true)
+const serviciosActivos = ref(0)
 
 const statusMeta = {
   pendiente: { label: 'Pendiente', variant: 'warning' },
@@ -93,6 +95,14 @@ onMounted(async () => {
           .filter(b => !['cancelada', 'no_asistida'].includes(b.estado))
           .sort((a, b) => new Date(a.fecha_hora) - new Date(b.fecha_hora))
       }).catch(() => {}).finally(() => { bookingsLoading.value = false }),
+
+    api.get('/professional/agenda').then(({ data }) => {
+      tieneAgenda.value = Boolean(data.agenda)
+    }).catch(() => { tieneAgenda.value = false }),
+
+    api.get('/professional/services').then(({ data }) => {
+      serviciosActivos.value = (data.data ?? []).filter((s) => s.activo).length
+    }).catch(() => {}),
   ])
 })
 </script>
@@ -102,6 +112,41 @@ onMounted(async () => {
     <div class="mb-8">
       <h1 class="text-2xl font-bold text-neutral-900">Panel profesional</h1>
       <p class="text-neutral-500 mt-1">Hola {{ auth.displayName }}, aquí están tus métricas del día.</p>
+    </div>
+
+    <div
+      v-if="!tieneAgenda"
+      class="mb-6 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-900 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+    >
+      <div class="flex items-start gap-2">
+        <AlertTriangle class="w-5 h-5 shrink-0 mt-0.5" />
+        <p>
+          <strong>Paso 1: configurá tu agenda.</strong>
+          Antes de crear servicios, definí tus días y horarios de atención.
+        </p>
+      </div>
+      <RouterLink
+        to="/dashboard/professional/schedule"
+        class="inline-flex items-center gap-1 font-medium underline shrink-0"
+      >
+        <Clock class="w-4 h-4" /> Configurar agenda
+      </RouterLink>
+    </div>
+
+    <div
+      v-else-if="tieneAgenda && serviciosActivos === 0"
+      class="mb-6 px-4 py-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-900 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+    >
+      <p>
+        <strong>Paso 2: publicá tu primer servicio.</strong>
+        Ya tenés agenda; ahora creá al menos un servicio para que te reserven.
+      </p>
+      <RouterLink
+        to="/dashboard/professional/services"
+        class="inline-flex items-center gap-1 font-medium underline shrink-0"
+      >
+        Crear servicio
+      </RouterLink>
     </div>
 
     <!-- Stats -->

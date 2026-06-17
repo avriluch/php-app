@@ -50,13 +50,9 @@ export const useAuthStore = defineStore('auth', () => {
 
   /** Convierte el formulario de RegisterPage al contrato de la API. */
   const buildRegisterPayload = (form) => {
-    const partes = form.name.trim().split(/\s+/).filter(Boolean)
-    const nombre = partes[0] ?? ''
-    const apellido = partes.slice(1).join(' ') || nombre
-
     const payload = {
-      nombre,
-      apellido,
+      nombre: form.nombre.trim(),
+      apellido: form.apellido.trim(),
       email: form.email,
       password: form.password,
       password_confirmation: form.password_confirmation,
@@ -65,6 +61,7 @@ export const useAuthStore = defineStore('auth', () => {
 
     if (form.role === 'professional') {
       payload.titulo = form.titulo?.trim() || 'Profesional'
+      payload.categoria = form.categoria
     }
 
     return payload

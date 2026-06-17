@@ -13,6 +13,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class ProfessionalController extends Controller
 {
@@ -24,11 +25,21 @@ class ProfessionalController extends Controller
             $term = '%' . $search . '%';
             $query->where(function (Builder $q) use ($term) {
                 $q->where('titulo', 'like', $term)
+                    ->orWhere('categoria', 'like', $term)
                     ->orWhereHas('user', function (Builder $uq) use ($term) {
                         $uq->where('nombre', 'like', $term)
                             ->orWhere('apellido', 'like', $term);
                     });
             });
+        }
+
+        if ($categoria = $request->string('categoria')->trim()->toString()) {
+            abort_unless(
+                array_key_exists($categoria, config('professional_categories')),
+                422,
+                'Categoría inválida.',
+            );
+            $query->where('categoria', $categoria);
         }
 
         // Filtros sobre servicios del profesional: modalidad, tipo, precio.
@@ -160,7 +171,11 @@ class ProfessionalController extends Controller
         $perfil = ProfessionalProfile::with('agenda')->findOrFail($id);
 
         if (! $perfil->agenda) {
-            return response()->json(['slots' => []]);
+            return response()->json([
+                'slots' => [],
+                'sin_agenda' => true,
+                'mensaje' => 'Este profesional aún no configuró su agenda. No hay turnos disponibles.',
+            ]);
         }
 
         $servicio = Service::findOrFail($datos['service_id']);
@@ -188,6 +203,8 @@ class ProfessionalController extends Controller
         $perfil = $request->user()->professionalProfile;
         abort_unless($perfil, 404, 'Perfil profesional no encontrado.');
 
+        $perfil->load('agenda');
+
         return response()->json($this->formatOwnProfile($perfil));
     }
 
@@ -201,11 +218,13 @@ class ProfessionalController extends Controller
 
         $datos = $request->validate([
             'titulo' => ['sometimes', 'string', 'max:120'],
+            'categoria' => ['sometimes', 'string', Rule::in(array_keys(config('professional_categories')))],
             'descripcion' => ['sometimes', 'nullable', 'string', 'max:2000'],
             'cancelacion_horas_minimas' => ['sometimes', 'integer', 'between:0,168'],
         ]);
 
         $perfil->fill($datos)->save();
+        $perfil->load('agenda');
 
         return response()->json([
             'message' => 'Perfil actualizado.',
@@ -219,8 +238,13 @@ class ProfessionalController extends Controller
         return [
             'id' => $perfil->id,
             'titulo' => $perfil->titulo,
+            'categoria' => $perfil->categoria,
+            'categoria_label' => $perfil->categoria
+                ? (config('professional_categories')[$perfil->categoria] ?? $perfil->categoria)
+                : null,
             'descripcion' => $perfil->descripcion,
             'cancelacion_horas_minimas' => (int) $perfil->cancelacion_horas_minimas,
+            'tiene_agenda' => (bool) $perfil->agenda,
         ];
     }
 

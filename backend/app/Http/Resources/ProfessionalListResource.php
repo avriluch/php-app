@@ -17,6 +17,10 @@ class ProfessionalListResource extends JsonResource
             'nombre' => $user->nombre,
             'apellido' => $user->apellido,
             'titulo' => $this->titulo,
+            'categoria' => $this->categoria,
+            'categoria_label' => $this->categoria
+                ? (config('professional_categories')[$this->categoria] ?? $this->categoria)
+                : null,
             'foto_perfil' => ProfilePhotoUrl::resolve($user->foto_perfil),
             'rating_avg' => round((float) ($this->reviews_avg_puntaje ?? 0), 1),
             'rating_count' => (int) ($this->reviews_count ?? 0),

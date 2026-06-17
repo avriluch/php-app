@@ -8,6 +8,7 @@ import AppCard from '@/components/ui/AppCard.vue'
 import AppBadge from '@/components/ui/AppBadge.vue'
 import AppAvatar from '@/components/ui/AppAvatar.vue'
 import AppSpinner from '@/components/ui/AppSpinner.vue'
+import { PROFESSIONAL_CATEGORIES } from '@/constants/professionalCategories'
 
 const router = useRouter()
 const search = ref('')
@@ -18,16 +19,11 @@ const featured = ref([])
 const loadingHome = ref(true)
 const categoryCounts = ref({})
 
-const categories = [
-  { name: 'Salud', emoji: '🩺', search: 'psicolog' },
-  { name: 'Entrenamiento', emoji: '🏋️', search: 'entrenador' },
-  { name: 'Educación', emoji: '📚', search: 'inglés' },
-  { name: 'Consultoría', emoji: '💼', search: 'coach' },
-  { name: 'Tecnología', emoji: '💻', search: 'diseñador' },
-  { name: 'Legal', emoji: '⚖️', search: 'abogad' },
-  { name: 'Finanzas', emoji: '📊', search: 'contador' },
-  { name: 'Nutrición', emoji: '🥗', search: 'nutricion' },
-]
+const categories = PROFESSIONAL_CATEGORIES.map((cat) => ({
+  name: cat.label,
+  emoji: cat.emoji,
+  value: cat.value,
+}))
 
 const steps = [
   {
@@ -84,11 +80,11 @@ function handleSearch() {
 }
 
 function goCategory(cat) {
-  router.push({ name: 'professionals', query: { search: cat.search } })
+  router.push({ name: 'professionals', query: { categoria: cat.value } })
 }
 
-function countForCategory(searchTerm) {
-  return categoryCounts.value[searchTerm] ?? 0
+function countForCategory(value) {
+  return categoryCounts.value[value] ?? 0
 }
 
 async function loadHomeData() {
@@ -109,10 +105,7 @@ async function loadHomeData() {
 
     const counts = {}
     for (const cat of categories) {
-      counts[cat.search] = all.filter((p) => {
-        const text = `${p.titulo} ${p.nombre} ${p.apellido}`.toLowerCase()
-        return text.includes(cat.search.toLowerCase())
-      }).length
+      counts[cat.value] = all.filter((p) => p.categoria === cat.value).length
     }
     categoryCounts.value = counts
   } catch {
@@ -200,7 +193,7 @@ onMounted(loadHomeData)
             <span class="text-2xl group-hover:scale-110 transition-transform">{{ cat.emoji }}</span>
             <span class="text-xs font-medium text-neutral-700 text-center">{{ cat.name }}</span>
             <span class="text-xs text-neutral-400">
-              {{ countForCategory(cat.search) || 'Ver' }}
+              {{ countForCategory(cat.value) || 'Ver' }}
             </span>
           </button>
         </div>

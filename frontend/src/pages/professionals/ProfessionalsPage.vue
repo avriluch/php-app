@@ -22,6 +22,7 @@ const search = ref('')
 const filters = reactive({
   modalidad: '',
   type: '',
+  categoria: '',
   precio_min: '',
   precio_max: '',
   ciudad: '',
@@ -61,6 +62,7 @@ function buildParams() {
   if (search.value.trim()) p.search = search.value.trim()
   if (filters.modalidad) p.modalidad = filters.modalidad
   if (filters.type) p.type = filters.type
+  if (filters.categoria) p.categoria = filters.categoria
   if (filters.precio_min !== '') p.precio_min = filters.precio_min
   if (filters.precio_max !== '') p.precio_max = filters.precio_max
   if (filters.ciudad.trim()) p.ciudad = filters.ciudad.trim()
@@ -93,6 +95,7 @@ async function fetchProfessionals() {
 function clearFilters() {
   filters.modalidad = ''
   filters.type = ''
+  filters.categoria = ''
   filters.precio_min = ''
   filters.precio_max = ''
   filters.ciudad = ''
@@ -156,6 +159,9 @@ onMounted(() => {
   const q = route.query.search ?? route.query.q
   if (typeof q === 'string' && q.trim()) {
     search.value = q.trim()
+  }
+  if (typeof route.query.categoria === 'string' && route.query.categoria.trim()) {
+    filters.categoria = route.query.categoria.trim()
   }
   fetchProfessionals()
 })
