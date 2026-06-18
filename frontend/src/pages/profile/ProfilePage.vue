@@ -1,7 +1,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
-import { RouterLink } from 'vue-router'
-import { CheckCircle, Camera, Trash2 } from '@lucide/vue'
+import { RouterLink, useRouter } from 'vue-router'
+import { CheckCircle, Camera, Trash2, AlertTriangle } from '@lucide/vue'
 import AppCard from '@/components/ui/AppCard.vue'
 import AppAvatar from '@/components/ui/AppAvatar.vue'
 import AppBadge from '@/components/ui/AppBadge.vue'
@@ -10,8 +10,12 @@ import AppInput from '@/components/ui/AppInput.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
+const router = useRouter()
 const loading = ref(false)
 const saving = ref(false)
+const confirmandoEliminar = ref(false)
+const eliminando = ref(false)
+const errorEliminar = ref(null)
 const avatarLoading = ref(false)
 const avatarInput = ref(null)
 const avatarPreview = ref(null)
@@ -227,6 +231,18 @@ async function quitarFoto() {
   }
 }
 
+async function eliminarCuenta() {
+  eliminando.value = true
+  errorEliminar.value = null
+  try {
+    await auth.deleteAccount()
+    router.push('/')
+  } catch (e) {
+    errorEliminar.value = e.response?.data?.message ?? 'No se pudo eliminar la cuenta. Intentá de nuevo.'
+    eliminando.value = false
+  }
+}
+
 onBeforeUnmount(revocarPreview)
 
 onMounted(async () => {
@@ -408,6 +424,58 @@ onMounted(async () => {
             </AppButton>
           </div>
         </form>
+      </AppCard>
+
+      <!-- Zona de riesgo: eliminar cuenta -->
+      <AppCard padding="lg" class="mt-6 border-red-200">
+        <div class="flex items-start gap-3">
+          <div class="w-9 h-9 rounded-xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
+            <AlertTriangle class="w-5 h-5" />
+          </div>
+          <div class="flex-1">
+            <h3 class="font-semibold text-neutral-900">Eliminar mi cuenta</h3>
+            <p class="text-sm text-neutral-500 mt-1">
+              Tu cuenta se desactivará y se cerrará la sesión. No vas a poder ingresar
+              hasta que un administrador la reactive. Tu historial se conserva.
+            </p>
+
+            <p v-if="errorEliminar" class="text-sm text-red-600 mt-3">{{ errorEliminar }}</p>
+
+            <div v-if="!confirmandoEliminar" class="mt-4">
+              <AppButton
+                type="button"
+                variant="outline"
+                size="sm"
+                class="border-red-300 text-red-600 hover:bg-red-50"
+                @click="confirmandoEliminar = true"
+              >
+                <Trash2 class="w-4 h-4" /> Eliminar mi cuenta
+              </AppButton>
+            </div>
+
+            <div v-else class="mt-4 flex flex-wrap items-center gap-3">
+              <span class="text-sm font-medium text-neutral-700">¿Estás seguro?</span>
+              <AppButton
+                type="button"
+                variant="danger"
+                size="sm"
+                :loading="eliminando"
+                @click="eliminarCuenta"
+              >
+                Sí, eliminar
+              </AppButton>
+              <AppButton
+                type="button"
+                variant="outline"
+                size="sm"
+                :disabled="eliminando"
+                @click="confirmandoEliminar = false"
+              >
+                Cancelar
+              </AppButton>
+            </div>
+          </div>
+        </div>
       </AppCard>
     </template>
 

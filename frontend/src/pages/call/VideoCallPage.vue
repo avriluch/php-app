@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Room, RoomEvent, Track, DisconnectReason } from 'livekit-client'
 import { Mic, MicOff, Video, VideoOff, PhoneOff } from '@lucide/vue'
@@ -95,6 +95,17 @@ async function attachLocalVideo() {
     camPub.track.attach(localVideoEl.value)
   }
 }
+
+// Hay dos <video ref="localVideoEl"> en el template (el preview centrado mientras
+// esperás, y el recuadro chico abajo a la derecha cuando ya hay otro participante).
+// Solo uno existe en el DOM a la vez; al cambiar la cantidad de participantes, Vue
+// monta el otro elemento y hay que volver a enganchar el track de la cámara, o el
+// recuadro propio queda en negro / no aparece.
+watch(() => remoteParticipants.value.length, async () => {
+  if (enLlamada.value && videoEnabled.value) {
+    await attachLocalVideo()
+  }
+})
 
 function registrarEventosRoom(targetRoom) {
   targetRoom

@@ -18,6 +18,7 @@ use App\Models\Payment;
 use App\Models\ProfessionalProfile;
 use App\Models\Service;
 use App\Services\AvailabilityService;
+use App\Services\NotificacionService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -27,8 +28,10 @@ use Illuminate\Validation\ValidationException;
 
 class BookingController extends Controller
 {
-    public function __construct(private readonly AvailabilityService $disponibilidad)
-    {
+    public function __construct(
+        private readonly AvailabilityService $disponibilidad,
+        private readonly NotificacionService $notificaciones,
+    ) {
     }
 
     public function index(Request $request): JsonResponse
@@ -192,7 +195,9 @@ class BookingController extends Controller
 
             $reserva->load(['service', 'professionalProfile.user', 'payment']);
 
-            // Notificación + email asincrónicos tras el commit.
+            // Notificación in-app SÍNCRONA (aparece al instante en el badge aunque
+            // la cola no esté corriendo). El email + broadcast siguen async tras el commit.
+            $this->notificaciones->reservaCreada($reserva);
             EnviarConfirmacionReserva::dispatch($reserva->id)->afterCommit();
 
             return response()->json(new BookingResource($reserva), 201);
@@ -240,6 +245,7 @@ class BookingController extends Controller
 
         $reserva->refresh()->load(['service', 'professionalProfile.user', 'payment']);
 
+        $this->notificaciones->reservaCancelada($reserva);
         EnviarCancelacionReserva::dispatch($reserva->id)->afterCommit();
 
         return response()->json(new BookingResource($reserva));
@@ -299,6 +305,7 @@ class BookingController extends Controller
 
         $reserva->refresh()->load(['service', 'professionalProfile.user', 'payment']);
 
+        $this->notificaciones->reservaReagendada($reserva, $fechaAnterior);
         EnviarReagendacionReserva::dispatch($reserva->id, $fechaAnterior)->afterCommit();
 
         return response()->json(new BookingResource($reserva));

@@ -34,6 +34,7 @@ Route::prefix('auth')->group(function () {
         Route::patch('/me', [AuthController::class, 'updateMe']);
         Route::post('/me/avatar', [AuthController::class, 'uploadAvatar']);
         Route::delete('/me/avatar', [AuthController::class, 'deleteAvatar']);
+        Route::delete('/me', [AuthController::class, 'deleteAccount']);
         Route::post('/logout', [AuthController::class, 'logout']);
     });
 });

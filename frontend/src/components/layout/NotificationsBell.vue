@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Bell, Check, CheckCheck, Calendar, AlertCircle } from '@lucide/vue'
+import { Bell, Check, CheckCheck, Calendar, AlertCircle, CreditCard } from '@lucide/vue'
 import { useNotificationsStore } from '@/stores/notifications'
 
 const store = useNotificationsStore()
@@ -49,12 +49,14 @@ function tiempoRelativo(iso) {
 function iconoPorTipo(tipo) {
   if (tipo === 'cancelacion') return AlertCircle
   if (tipo === 'recordatorio') return Calendar
+  if (tipo === 'pago') return CreditCard
   return Check
 }
 
 function colorPorTipo(tipo) {
   if (tipo === 'cancelacion') return 'text-red-500'
   if (tipo === 'recordatorio') return 'text-amber-500'
+  if (tipo === 'pago') return 'text-primary-600'
   return 'text-green-500'
 }
 

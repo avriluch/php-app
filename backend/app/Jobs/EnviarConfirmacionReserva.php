@@ -2,11 +2,8 @@
 
 namespace App\Jobs;
 
-use App\Enums\NotificationType;
 use App\Events\NuevaReservaProfesional;
 use App\Models\Booking;
-use App\Models\Notification;
-use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Foundation\Queue\Queueable;
@@ -14,8 +11,9 @@ use Illuminate\Support\Facades\Log;
 use App\Services\BrevoMailService;
 
 /**
- * Notifica al cliente y al profesional sobre una reserva recién creada.
- * Persiste registros en `notifications` y envía email a ambos.
+ * Envía el email de confirmación al cliente y al profesional, y transmite el
+ * broadcast en vivo al profesional. La notificación in-app se crea de forma
+ * síncrona en el controller (NotificacionService), no acá.
  */
 class EnviarConfirmacionReserva implements ShouldQueue
 {
@@ -40,21 +38,14 @@ class EnviarConfirmacionReserva implements ShouldQueue
 
         $profUser = $reserva->professionalProfile?->user;
         $cliente = $reserva->client;
-        $fechaFormateada = $reserva->fecha_hora?->format('d/m/Y H:i');
 
         $brevoMail = app(BrevoMailService::class);
 
-        // Notificación + email al cliente
-        if ($cliente) {
-            Notification::create([
-                'user_id' => $cliente->id,
-                'booking_id' => $reserva->id,
-                'tipo' => NotificationType::Confirmacion,
-                'mensaje' => 'Tu reserva con ' . ($profUser?->nombre ?? 'tu profesional')
-                    . ' fue creada para el ' . $fechaFormateada . '.',
-                'fecha_envio' => Carbon::now(),
-            ]);
+        // La notificación in-app ya se creó de forma síncrona en el controller
+        // (NotificacionService). Acá solo enviamos el email y el broadcast.
 
+        // Email al cliente
+        if ($cliente) {
             $brevoMail->send(
                 $cliente->email,
                 'Reserva confirmada con ' . ($profUser?->nombre ?? 'tu profesional'),
@@ -63,17 +54,8 @@ class EnviarConfirmacionReserva implements ShouldQueue
             );
         }
 
-        // Notificación + email al profesional
+        // Email + broadcast al profesional
         if ($profUser) {
-            Notification::create([
-                'user_id' => $profUser->id,
-                'booking_id' => $reserva->id,
-                'tipo' => NotificationType::Confirmacion,
-                'mensaje' => 'Nueva reserva de ' . ($cliente?->nombre ?? 'un cliente')
-                    . ' para el ' . $fechaFormateada . '.',
-                'fecha_envio' => Carbon::now(),
-            ]);
-
             $brevoMail->send(
                 $profUser->email,
                 'Nueva reserva: ' . ($cliente?->nombre ?? 'Cliente') . ' ' . ($cliente?->apellido ?? ''),

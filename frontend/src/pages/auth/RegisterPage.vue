@@ -111,7 +111,11 @@ const handleSubmit = async () => {
 }
 
 const oauthLogin = (provider) => {
-  window.location.href = `${import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api'}/auth/${provider}/redirect`
+  // Para registrarse con Google primero hay que elegir el tipo de cuenta,
+  // así el backend crea cliente o profesional según corresponda.
+  if (!validateStep1()) return
+  const base = import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api'
+  window.location.href = `${base}/auth/${provider}/redirect?role=${form.role}`
 }
 
 onMounted(async () => {
@@ -190,8 +194,11 @@ onMounted(async () => {
 
       <AppButton variant="outline" size="md" class="w-full" @click="oauthLogin('google')">
         <img src="https://www.google.com/favicon.ico" class="w-4 h-4" alt="Google" />
-        Continuar con Google
+        Continuar con Google{{ form.role === 'professional' ? ' como profesional' : form.role === 'client' ? ' como cliente' : '' }}
       </AppButton>
+      <p class="text-xs text-neutral-400 text-center mt-2">
+        Elegí arriba si sos cliente o profesional antes de continuar con Google.
+      </p>
     </div>
 
     <!-- Step 2: datos personales -->

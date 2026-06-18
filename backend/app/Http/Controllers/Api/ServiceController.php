@@ -124,7 +124,7 @@ class ServiceController extends Controller
             'nombre' => [...$reglaBase, 'string', 'max:150'],
             'descripcion' => ['nullable', 'string', 'max:2000'],
             'duracion' => ['nullable', 'integer', 'between:5,600'],
-            'precio' => [...$reglaBase, 'numeric', 'min:0'],
+            'precio' => [...$reglaBase, 'numeric', 'gt:0'],
             'modalidad' => [...$reglaBase, Rule::in(array_column(Modalidad::cases(), 'value'))],
             'location_id' => ['nullable', 'integer', 'exists:locations,id'],
             'cantidad_sesiones' => ['nullable', 'integer', 'between:1,200'],

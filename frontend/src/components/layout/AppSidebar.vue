@@ -1,17 +1,32 @@
 <script setup>
 import { computed } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
   LayoutDashboard, Calendar, Users, Settings, Star, CreditCard,
-  Briefcase, Bell, X,
+  Briefcase, Bell, X, LogOut,
 } from '@lucide/vue'
 import AppAvatar from '@/components/ui/AppAvatar.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useUIStore } from '@/stores/ui'
+import { useNotificationsStore } from '@/stores/notifications'
 
 const auth = useAuthStore()
 const ui = useUIStore()
 const route = useRoute()
+const router = useRouter()
+const notificaciones = useNotificationsStore()
+
+// Badge a mostrar sobre la etiqueta «Notificaciones» del menú lateral.
+const notifBadge = computed(() => {
+  const n = notificaciones.unreadCount
+  if (!n) return ''
+  return n > 99 ? '99+' : String(n)
+})
+
+function cerrarSesion() {
+  auth.logout()
+  router.push('/')
+}
 
 const navByRole = {
   client: [
@@ -84,7 +99,7 @@ const isActive = (to) => {
         :key="link.to"
         :to="link.to"
         :class="[
-          'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors no-underline mb-0.5',
+          'relative flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors no-underline mb-0.5',
           isActive(link.to)
             ? 'bg-primary-50 text-primary-700'
             : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900',
@@ -93,6 +108,20 @@ const isActive = (to) => {
       >
         <component :is="link.icon" class="w-5 h-5 shrink-0" />
         <span v-if="ui.sidebarOpen" class="whitespace-nowrap">{{ link.label }}</span>
+
+        <!-- Badge de no leídas sobre «Notificaciones» -->
+        <template v-if="link.to === '/dashboard/notifications' && notifBadge">
+          <span
+            v-if="ui.sidebarOpen"
+            class="ml-auto min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] font-bold flex items-center justify-center"
+          >
+            {{ notifBadge }}
+          </span>
+          <span
+            v-else
+            class="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-600"
+          ></span>
+        </template>
       </RouterLink>
     </nav>
 
@@ -105,6 +134,19 @@ const isActive = (to) => {
           <p class="text-xs text-neutral-500 truncate">{{ auth.user?.email }}</p>
         </div>
       </div>
+
+      <button
+        type="button"
+        :class="[
+          'mt-3 flex items-center gap-2 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors cursor-pointer',
+          ui.sidebarOpen ? 'w-full px-3 py-2' : 'w-9 h-9 justify-center',
+        ]"
+        :title="!ui.sidebarOpen ? 'Cerrar sesión' : undefined"
+        @click="cerrarSesion"
+      >
+        <LogOut class="w-4 h-4 shrink-0" />
+        <span v-if="ui.sidebarOpen" class="whitespace-nowrap">Cerrar sesión</span>
+      </button>
     </div>
   </aside>
 </template>

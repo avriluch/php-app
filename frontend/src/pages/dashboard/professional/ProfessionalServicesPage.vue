@@ -38,7 +38,7 @@ const formularioVacio = () => ({
   descripcion: '',
   duracion: 60,
   cantidad_sesiones: 4,
-  precio: 0,
+  precio: null,
   modalidad: 'virtual',
   location_id: '',
   activo: true,
@@ -123,6 +123,13 @@ async function crearUbicacionSiHaceFalta() {
 }
 
 async function guardar() {
+  // El precio debe ser mayor a 0 (no se permiten servicios gratis).
+  const precioNum = Number(formulario.precio)
+  if (!Number.isFinite(precioNum) || precioNum <= 0) {
+    erroresForm.value = { precio: ['El precio debe ser mayor a 0.'] }
+    return
+  }
+
   guardando.value = true
   erroresForm.value = {}
   mensajeOk.value = null

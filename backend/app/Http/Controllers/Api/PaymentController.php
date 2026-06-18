@@ -8,6 +8,7 @@ use App\Enums\PaymentStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Payment;
 use App\Models\User;
+use App\Services\NotificacionService;
 use App\Services\PayPalService;
 use App\Services\SimulatedCardPaymentService;
 use Carbon\Carbon;
@@ -20,6 +21,7 @@ class PaymentController extends Controller
     public function __construct(
         private readonly PayPalService $paypal,
         private readonly SimulatedCardPaymentService $cardPayment,
+        private readonly NotificacionService $notificaciones,
     ) {
     }
 
@@ -212,6 +214,9 @@ class PaymentController extends Controller
         if ($booking && in_array($booking->estado, [BookingStatus::Pendiente, BookingStatus::Confirmada], true)) {
             $booking->update(['estado' => BookingStatus::Pagada]);
         }
+
+        // Notificación in-app síncrona para cliente y profesional.
+        $this->notificaciones->pagoCompletado($payment);
     }
 
     /** @return array<string, mixed> */

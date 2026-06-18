@@ -187,4 +187,24 @@ class AuthController extends Controller
 
         return response()->json(['message' => 'Sesión cerrada.']);
     }
+
+    /**
+     * Desactiva la cuenta del usuario autenticado (borrado lógico, reversible
+     * por un admin). No borra datos: marca `activo = false`, revoca todos los
+     * tokens y cierra la sesión. El historial de reservas/pagos se conserva.
+     */
+    public function deleteAccount(Request $request): JsonResponse
+    {
+        $usuario = $request->user();
+
+        $usuario->activo = false;
+        $usuario->save();
+
+        // Revocar todos los tokens: la sesión actual y cualquier otra.
+        $usuario->tokens()->delete();
+
+        return response()->json([
+            'message' => 'Tu cuenta fue desactivada. Si querés volver, contactá al administrador para reactivarla.',
+        ]);
+    }
 }

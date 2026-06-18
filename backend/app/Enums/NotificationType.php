@@ -8,4 +8,5 @@ enum NotificationType: string
     case Recordatorio = 'recordatorio';
     case Cancelacion = 'cancelacion';
     case Reagendacion = 'reagendacion';
+    case Pago = 'pago';
 }

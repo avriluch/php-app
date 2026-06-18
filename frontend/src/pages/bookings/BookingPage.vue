@@ -7,6 +7,7 @@ import AppButton from '@/components/ui/AppButton.vue'
 import AppCard from '@/components/ui/AppCard.vue'
 import AppSpinner from '@/components/ui/AppSpinner.vue'
 import AppBadge from '@/components/ui/AppBadge.vue'
+import AppCalendar from '@/components/ui/AppCalendar.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -264,15 +265,10 @@ onMounted(loadData)
         <h2 class="text-lg font-semibold text-neutral-900 mb-4">Elegí fecha y horario</h2>
 
         <AppCard class="mb-4">
-          <label class="block text-sm font-medium text-neutral-700 mb-2">
+          <label class="block text-sm font-medium text-neutral-700 mb-3">
             <Calendar class="w-4 h-4 inline mr-1" /> Fecha
           </label>
-          <input
-            v-model="selectedDate"
-            type="date"
-            :min="today"
-            class="w-full border border-neutral-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-          />
+          <AppCalendar v-model="selectedDate" :min="today" class="max-w-sm" />
         </AppCard>
 
         <div v-if="selectedDate">

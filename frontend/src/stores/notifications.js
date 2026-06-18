@@ -22,6 +22,12 @@ export const useNotificationsStore = defineStore('notifications', () => {
 
   let canalSuscrito = null
   let inicializado = false
+  let intervaloPolling = null
+
+  // Refresco periódico: garantiza que el badge se actualice aunque Reverb
+  // (WebSocket) no esté corriendo. 45s es suficiente para una demo sin
+  // martillar la API.
+  const POLLING_MS = 45000
 
   const ultimas = computed(() => items.value.slice(0, 5))
 
@@ -95,14 +101,34 @@ export const useNotificationsStore = defineStore('notifications', () => {
     }
   }
 
+  function iniciarPolling() {
+    if (intervaloPolling) return
+    intervaloPolling = setInterval(() => {
+      // Solo refrescar si la pestaña está visible, para no gastar requests
+      // mientras el usuario no está mirando.
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        cargar()
+      }
+    }, POLLING_MS)
+  }
+
+  function detenerPolling() {
+    if (intervaloPolling) {
+      clearInterval(intervaloPolling)
+      intervaloPolling = null
+    }
+  }
+
   async function init() {
     if (inicializado) return
     inicializado = true
     await cargar()
     suscribir()
+    iniciarPolling()
   }
 
   function destroy() {
+    detenerPolling()
     desuscribir()
     items.value = []
     unreadCount.value = 0

@@ -126,6 +126,12 @@ export const useAuthStore = defineStore('auth', () => {
     return user.value
   }
 
+  /** Desactiva la cuenta (soft delete) y cierra la sesión. */
+  const deleteAccount = async () => {
+    await api.delete('/auth/me')
+    logout()
+  }
+
   // Restaurar header de axios al iniciar
   if (token.value) {
     api.defaults.headers.common['Authorization'] = `Bearer ${token.value}`
@@ -149,5 +155,6 @@ export const useAuthStore = defineStore('auth', () => {
     updateProfile,
     uploadAvatar,
     removeAvatar,
+    deleteAccount,
   }
 })

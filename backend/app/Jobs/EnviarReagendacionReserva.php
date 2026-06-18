@@ -2,10 +2,7 @@
 
 namespace App\Jobs;
 
-use App\Enums\NotificationType;
 use App\Models\Booking;
-use App\Models\Notification;
-use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Foundation\Queue\Queueable;
@@ -35,19 +32,13 @@ class EnviarReagendacionReserva implements ShouldQueue
 
         $profUser = $reserva->professionalProfile?->user;
         $cliente = $reserva->client;
-        $fechaFormateada = $reserva->fecha_hora?->format('d/m/Y H:i');
 
         $brevoMail = app(BrevoMailService::class);
 
-        if ($cliente) {
-            Notification::create([
-                'user_id' => $cliente->id,
-                'booking_id' => $reserva->id,
-                'tipo' => NotificationType::Reagendacion,
-                'mensaje' => 'Tu reserva fue reagendada para el ' . $fechaFormateada . '.',
-                'fecha_envio' => Carbon::now(),
-            ]);
+        // La notificación in-app ya se creó de forma síncrona en el controller
+        // (NotificacionService). Acá solo enviamos el email a ambos.
 
+        if ($cliente) {
             $brevoMail->send(
                 $cliente->email,
                 'Reserva reagendada',
@@ -57,14 +48,6 @@ class EnviarReagendacionReserva implements ShouldQueue
         }
 
         if ($profUser) {
-            Notification::create([
-                'user_id' => $profUser->id,
-                'booking_id' => $reserva->id,
-                'tipo' => NotificationType::Reagendacion,
-                'mensaje' => 'La reserva fue reagendada para el ' . $fechaFormateada . '.',
-                'fecha_envio' => Carbon::now(),
-            ]);
-
             $brevoMail->send(
                 $profUser->email,
                 'Reserva reagendada',
