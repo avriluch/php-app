@@ -6,6 +6,8 @@ use App\Models\Booking;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Foundation\Queue\Queueable;
+use App\Events\ReservaReagendada;
+use Illuminate\Support\Facades\Log;
 use App\Services\BrevoMailService;
 
 class EnviarReagendacionReserva implements ShouldQueue
@@ -53,6 +55,14 @@ class EnviarReagendacionReserva implements ShouldQueue
                 'Reserva reagendada',
                 'mail.reserva-reagendada',
                 ['reserva' => $reserva, 'destinatario' => 'profesional', 'fechaAnterior' => $this->fechaAnterior],
+            );
+        }
+
+        try {
+            ReservaReagendada::dispatch($reserva, $this->fechaAnterior);
+        } catch (\Throwable $e) {
+            Log::warning(
+                'No se pudo transmitir ReservaReagendada: ' . $e->getMessage()
             );
         }
     }

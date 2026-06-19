@@ -84,6 +84,12 @@ export const useNotificationsStore = defineStore('notifications', () => {
           // así que recargamos la lista para mantenerla sincronizada.
           cargar()
         })
+        .listen('.reserva-cancelada', () => {
+          cargar()
+        })
+        .listen('.reserva-reagendada', () => {
+          cargar()
+        })
     } catch (e) {
       console.warn('[notificaciones] No se pudo suscribir al canal WebSocket:', e?.message ?? e)
     }
