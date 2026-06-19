@@ -16,6 +16,7 @@ const estadoMeta = {
   completado: { label: 'Pagado', variant: 'success' },
   fallido: { label: 'Fallido', variant: 'danger' },
   reembolsado: { label: 'Reembolsado', variant: 'info' },
+  cancelado: { label: 'Cancelado', variant: 'danger' },
 }
 const metodoLabels = { tarjeta_debito: 'Débito', tarjeta_credito: 'Crédito', paypal: 'PayPal' }
 

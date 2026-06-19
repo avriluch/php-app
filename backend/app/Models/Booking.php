@@ -16,6 +16,7 @@ class Booking extends Model
         'service_id',
         'package_purchase_id',
         'fecha_hora',
+        'active_slot',
         'modalidad',
         'estado',
         'url_video_llamada',
@@ -27,6 +28,7 @@ class Booking extends Model
     {
         return [
             'fecha_hora' => 'datetime',
+            'active_slot' => 'datetime',
             'modalidad' => Modalidad::class,
             'estado' => BookingStatus::class,
             'cancelled_at' => 'datetime',

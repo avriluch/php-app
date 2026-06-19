@@ -96,4 +96,71 @@ class BookingConcurrencyTest extends TestCase
             ->assertStatus(422)
             ->assertJsonValidationErrors(['fecha_hora']);
     }
+
+    public function test_se_puede_reservar_un_slot_previamente_cancelado(): void
+    {
+        Queue::fake();
+        Event::fake();
+
+        $ubicacion = Location::create([
+            'ciudad' => 'Montevideo',
+            'pais' => 'UY',
+            'latitud' => -34.901112,
+            'longitud' => -56.164531,
+        ]);
+
+        $profesionalUser = User::factory()->create(['role' => UserRole::Professional]);
+
+        $perfil = ProfessionalProfile::create([
+            'user_id' => $profesionalUser->id,
+            'titulo' => 'Nutricionista',
+            'location_id' => $ubicacion->id,
+            'cancelacion_horas_minimas' => 24,
+        ]);
+
+        Agenda::create([
+            'professional_profile_id' => $perfil->id,
+            'horario_inicio' => '09:00:00',
+            'horario_fin' => '18:00:00',
+            'dias_disponibles' => [1, 2, 3, 4, 5],
+            'buffer_minutos' => 0,
+        ]);
+
+        $servicio = Service::create([
+            'professional_profile_id' => $perfil->id,
+            'type' => ServiceType::Session,
+            'nombre' => 'Consulta',
+            'duracion' => 60,
+            'precio' => 1500,
+            'modalidad' => Modalidad::Virtual,
+        ]);
+
+        $cliente1 = User::factory()->create(['role' => UserRole::Client]);
+        $cliente2 = User::factory()->create(['role' => UserRole::Client]);
+
+        $slot = Carbon::now()->startOfWeek()->addWeek()->setTime(10, 0)->toIso8601String();
+
+        $payload = [
+            'service_id' => $servicio->id,
+            'professional_id' => $perfil->id,
+            'fecha_hora' => $slot,
+            'modalidad' => 'virtual',
+        ];
+
+        // Cliente 1 reserva
+        Sanctum::actingAs($cliente1);
+        $res = $this->postJson('/api/bookings', $payload)
+            ->assertStatus(201);
+
+        $bookingId = $res->json('id');
+
+        // Cancelar reserva
+        $this->patchJson("/api/bookings/{$bookingId}/cancel")
+            ->assertOk();
+
+        // Cliente 2 reserva el mismo slot y debe funcionar (no debe tirar Duplicate entry)
+        Sanctum::actingAs($cliente2);
+        $this->postJson('/api/bookings', $payload)
+            ->assertStatus(201);
+    }
 }

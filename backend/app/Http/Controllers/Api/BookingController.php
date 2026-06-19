@@ -177,6 +177,7 @@ class BookingController extends Controller
                 'service_id' => $servicio->id,
                 'package_purchase_id' => $compraPaquete?->id,
                 'fecha_hora' => $fechaHora,
+                'active_slot' => $fechaHora,
                 'modalidad' => $modalidadReserva,
                 'estado' => BookingStatus::Pendiente,
             ]);
@@ -236,7 +237,12 @@ class BookingController extends Controller
                 'estado' => BookingStatus::Cancelada,
                 'cancelled_at' => Carbon::now(),
                 'cancel_motivo' => $motivo,
+                'active_slot' => null,
             ]);
+
+            if ($reserva->payment && $reserva->payment->estado === PaymentStatus::Pendiente) {
+                $reserva->payment->update(['estado' => PaymentStatus::Cancelado]);
+            }
 
             if ($reserva->packagePurchase) {
                 $reserva->packagePurchase->increment('sesiones_restantes');
@@ -300,7 +306,10 @@ class BookingController extends Controller
                 ]);
             }
 
-            $reserva->update(['fecha_hora' => $nuevaFecha]);
+            $reserva->update([
+                'fecha_hora' => $nuevaFecha,
+                'active_slot' => $nuevaFecha,
+            ]);
         });
 
         $reserva->refresh()->load(['service', 'professionalProfile.user', 'payment']);
@@ -313,7 +322,7 @@ class BookingController extends Controller
 
     public function updateStatus(Request $request, int $id): JsonResponse
     {
-        $reserva = Booking::with(['service', 'professionalProfile'])->findOrFail($id);
+        $reserva = Booking::with(['service', 'professionalProfile', 'payment'])->findOrFail($id);
 
         $usuario = $request->user();
         $esProfesionalDueno = $usuario->role === UserRole::Professional
@@ -341,7 +350,24 @@ class BookingController extends Controller
             $cambios['url_video_llamada'] = "booking-{$reserva->id}";
         }
 
-        $reserva->update($cambios);
+        if ($siguiente === BookingStatus::Cancelada) {
+            $cambios['active_slot'] = null;
+            $cambios['cancelled_at'] = Carbon::now();
+        }
+
+        DB::transaction(function () use ($reserva, $cambios, $siguiente) {
+            $reserva->update($cambios);
+
+            if ($siguiente === BookingStatus::Cancelada) {
+                if ($reserva->payment && $reserva->payment->estado === PaymentStatus::Pendiente) {
+                    $reserva->payment->update(['estado' => PaymentStatus::Cancelado]);
+                }
+                if ($reserva->packagePurchase) {
+                    $reserva->packagePurchase->increment('sesiones_restantes');
+                }
+            }
+        });
+
         $reserva->refresh()->load(['service', 'professionalProfile.user', 'payment']);
 
         return response()->json(new BookingResource($reserva));

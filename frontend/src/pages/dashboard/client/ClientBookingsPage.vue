@@ -8,6 +8,7 @@ import AppSpinner from '@/components/ui/AppSpinner.vue'
 import AppButton from '@/components/ui/AppButton.vue'
 import AppBadge from '@/components/ui/AppBadge.vue'
 import StarRating from '@/components/ui/StarRating.vue'
+import AppCalendar from '@/components/ui/AppCalendar.vue'
 
 const loading = ref(true)
 const error = ref(null)
@@ -272,7 +273,12 @@ async function submitReview(booking) {
             <div v-if="b.payment" class="mt-3 flex items-center justify-between">
               <span class="text-sm text-neutral-500">
                 Pago:
-                <span :class="b.payment.estado === 'completado' ? 'text-accent-600 font-medium' : 'text-amber-600 font-medium'">
+                <span :class="{
+                  'text-accent-600 font-medium': b.payment.estado === 'completado',
+                  'text-red-600 font-medium': b.payment.estado === 'cancelado' || b.payment.estado === 'fallido',
+                  'text-amber-600 font-medium': b.payment.estado === 'pendiente',
+                  'text-neutral-500 font-medium': b.payment.estado === 'reembolsado'
+                }">
                   {{ b.payment.estado }}
                 </span>
                 <span v-if="b.payment.metodo"> · {{ b.payment.metodo }}</span>
@@ -365,15 +371,15 @@ async function submitReview(booking) {
                     <p class="text-sm text-neutral-500">Elegí una nueva fecha y horario disponible.</p>
                   </div>
 
-                  <label class="block">
-                    <span class="text-sm font-medium text-neutral-700">Fecha</span>
-                    <input
-                      type="date"
-                      v-model="rescheduleForm.fecha"
-                      :min="today"
-                      class="mt-1 w-full border border-neutral-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    />
-                  </label>
+                  <div class="block">
+                    <span class="text-sm font-medium text-neutral-700 block mb-2">Fecha</span>
+                    <div class="max-w-sm bg-white rounded-xl p-4 border border-neutral-200 shadow-sm">
+                      <AppCalendar
+                        v-model="rescheduleForm.fecha"
+                        :min="today"
+                      />
+                    </div>
+                  </div>
 
                   <div v-if="slotsLoading" class="flex justify-center py-6">
                     <AppSpinner size="md" />

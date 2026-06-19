@@ -12,7 +12,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->foreignId('booking_id')->nullable()->constrained()->nullOnDelete();
-            $table->enum('tipo', ['confirmacion', 'recordatorio', 'cancelacion', 'reagendacion']);
+            $table->enum('tipo', ['confirmacion', 'recordatorio', 'cancelacion', 'reagendacion', 'pago']);
             $table->text('mensaje');
             $table->timestamp('fecha_envio')->useCurrent();
             $table->timestamp('read_at')->nullable();
