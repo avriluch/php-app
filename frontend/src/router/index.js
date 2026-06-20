@@ -258,4 +258,24 @@ router.beforeEach((to, from) => {
   }
 })
 
+// Tras un deploy nuevo, los chunks lazy (.js con hash) viejos dejan de existir
+// en el server. Si una navegación falla al cargar su módulo, recargamos la
+// página hacia el destino para traer la versión actual — automatiza el
+// "refrescar a mano" que había que hacer. El flag evita un bucle de recargas.
+const FLAG_RECARGA_CHUNK = 'recarga-chunk-viejo'
+
+router.onError((error, to) => {
+  const mensaje = String(error?.message || '')
+  const falloDeChunk = /dynamically imported module|Importing a module script failed|error loading dynamically imported module/i.test(mensaje)
+  if (!falloDeChunk) return
+  if (sessionStorage.getItem(FLAG_RECARGA_CHUNK)) return
+  sessionStorage.setItem(FLAG_RECARGA_CHUNK, '1')
+  window.location.assign(to?.fullPath || window.location.href)
+})
+
+// Navegación exitosa: limpiamos el flag para permitir futuras recargas.
+router.afterEach(() => {
+  sessionStorage.removeItem(FLAG_RECARGA_CHUNK)
+})
+
 export default router
