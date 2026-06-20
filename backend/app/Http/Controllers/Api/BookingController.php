@@ -55,8 +55,14 @@ class BookingController extends Controller
         }
         // Admin ve todo
 
-        if ($estado = $request->string('estado')->toString()) {
-            $query->where('estado', $estado);
+        if ($estado = $request->input('estado')) {
+
+            if (is_array($estado)) {
+                $query->whereIn('estado', $estado);
+            } else {
+                $query->where('estado', $estado);
+            }
+
         }
         if ($desde = $request->string('from')->toString()) {
             $query->where('fecha_hora', '>=', Carbon::parse($desde));

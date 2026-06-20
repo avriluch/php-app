@@ -45,12 +45,12 @@ onMounted(async () => {
     api.get('/bookings', {
       params: {
         from: new Date().toISOString(),
+        estado: ['pendiente', 'confirmada', 'pagada', 'en_curso'],
         order: 'asc',
         per_page: 3,
       },
     }).then(({ data }) => {
-      proximasReservas.value = (data.data ?? [])
-        .filter(b => ['pendiente', 'confirmada', 'pagada', 'en_curso'].includes(b.estado))
+      proximasReservas.value = data.data ?? []
     }).catch(() => {}).finally(() => { bookingsLoading.value = false }),
   ])
 })
