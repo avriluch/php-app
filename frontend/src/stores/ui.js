@@ -2,7 +2,9 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
 export const useUIStore = defineStore('ui', () => {
-  const sidebarOpen = ref(true)
+  // En desktop el sidebar arranca abierto; en mobile arranca cerrado (drawer oculto)
+  // para no tapar el contenido. El hamburguesa del topbar lo alterna.
+  const sidebarOpen = ref(typeof window !== 'undefined' ? window.innerWidth >= 768 : true)
   const toasts = ref([])
   let toastId = 0
 

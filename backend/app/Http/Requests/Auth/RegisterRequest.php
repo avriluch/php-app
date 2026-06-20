@@ -40,7 +40,9 @@ class RegisterRequest extends FormRequest
             ],
             'password' => ['required', 'confirmed', Password::defaults()],
             'telefono' => ['nullable', 'string', 'max:30'],
-            'role' => ['required', Rule::in(array_column(UserRole::cases(), 'value'))],
+            // Solo se permite registrarse como cliente o profesional. NO admin:
+            // dejar 'admin' acá permitiría a cualquiera crearse una cuenta de administrador.
+            'role' => ['required', Rule::in([UserRole::Client->value, UserRole::Professional->value])],
             'titulo' => ['required_if:role,professional', 'nullable', 'string', 'max:150'],
             'categoria' => ['required_if:role,professional', 'nullable', 'string', Rule::in(array_keys(config('professional_categories')))],
             'descripcion' => ['nullable', 'string', 'max:2000'],
@@ -58,6 +60,7 @@ class RegisterRequest extends FormRequest
             'password.required' => 'La contraseña es obligatoria.',
             'password.confirmed' => 'Las contraseñas no coinciden.',
             'role.required' => 'Seleccioná si sos cliente o profesional.',
+            'role.in' => 'El tipo de cuenta no es válido.',
             'titulo.required_if' => 'Indicá un título profesional.',
             'categoria.required_if' => 'Seleccioná una categoría.',
             'categoria.in' => 'La categoría seleccionada no es válida.',

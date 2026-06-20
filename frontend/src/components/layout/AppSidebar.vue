@@ -28,6 +28,14 @@ function cerrarSesion() {
   router.push('/')
 }
 
+// En mobile el sidebar es un drawer: al tocar un link o el logo, se cierra.
+// En desktop no hace nada (el sidebar es fijo en la columna).
+function cerrarEnMobile() {
+  if (typeof window !== 'undefined' && window.innerWidth < 768) {
+    ui.sidebarOpen = false
+  }
+}
+
 const navByRole = {
   client: [
     { label: 'Panel', to: '/dashboard/client', icon: LayoutDashboard },
@@ -70,15 +78,24 @@ const isActive = (to) => {
 </script>
 
 <template>
+  <!-- Backdrop: solo en mobile cuando el drawer está abierto. Tocarlo lo cierra. -->
+  <div
+    v-if="ui.sidebarOpen"
+    class="fixed inset-0 bg-black/40 z-40 md:hidden"
+    @click="ui.sidebarOpen = false"
+  ></div>
+
   <aside
     :class="[
-      'flex flex-col h-full bg-white border-r border-neutral-200 transition-all duration-300',
-      ui.sidebarOpen ? 'w-64' : 'w-0 md:w-16 overflow-hidden',
+      'flex-col h-full bg-white border-r border-neutral-200',
+      ui.sidebarOpen
+        ? 'fixed md:static inset-y-0 left-0 z-50 flex w-64'
+        : 'hidden md:flex md:w-16 overflow-hidden',
     ]"
   >
     <!-- Header -->
     <div class="flex items-center justify-between px-4 h-16 border-b border-neutral-100 shrink-0">
-      <RouterLink to="/" class="flex items-center gap-2 no-underline overflow-hidden">
+      <RouterLink to="/" class="flex items-center gap-2 no-underline overflow-hidden" @click="cerrarEnMobile">
         <span class="w-7 h-7 bg-primary-600 rounded-lg flex items-center justify-center shrink-0">
           <span class="text-white font-bold text-xs">S</span>
         </span>
@@ -105,6 +122,7 @@ const isActive = (to) => {
             : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900',
         ]"
         :title="!ui.sidebarOpen ? link.label : undefined"
+        @click="cerrarEnMobile"
       >
         <component :is="link.icon" class="w-5 h-5 shrink-0" />
         <span v-if="ui.sidebarOpen" class="whitespace-nowrap">{{ link.label }}</span>

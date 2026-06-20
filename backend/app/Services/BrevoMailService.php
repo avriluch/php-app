@@ -19,7 +19,7 @@ class BrevoMailService
 
         $htmlContent = view($view, $data)->render();
 
-        $response = Http::withHeaders([
+        $response = Http::timeout(15)->connectTimeout(5)->withHeaders([
             'api-key' => $apiKey,
             'accept' => 'application/json',
             'content-type' => 'application/json',
