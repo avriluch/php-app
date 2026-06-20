@@ -6,8 +6,6 @@ use App\Models\Booking;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Foundation\Queue\Queueable;
-use App\Events\ReservaCancelada;
-use Illuminate\Support\Facades\Log;
 use App\Services\BrevoMailService;
 
 class EnviarCancelacionReserva implements ShouldQueue
@@ -59,14 +57,6 @@ class EnviarCancelacionReserva implements ShouldQueue
                     'reserva' => $reserva,
                     'destinatario' => 'profesional',
                 ]
-            );
-        }
-
-        try {
-            ReservaCancelada::dispatch($reserva);
-        } catch (\Throwable $e) {
-            Log::warning(
-                'No se pudo transmitir ReservaCancelada: ' . $e->getMessage()
             );
         }
     }

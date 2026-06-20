@@ -2,18 +2,16 @@
 
 namespace App\Jobs;
 
-use App\Events\NuevaReservaProfesional;
 use App\Models\Booking;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Foundation\Queue\Queueable;
-use Illuminate\Support\Facades\Log;
 use App\Services\BrevoMailService;
 
 /**
- * Envía el email de confirmación al cliente y al profesional, y transmite el
- * broadcast en vivo al profesional. La notificación in-app se crea de forma
- * síncrona en el controller (NotificacionService), no acá.
+ * Envía el email de confirmación al cliente y al profesional.
+ * La notificación in-app y el broadcast en vivo se hacen de forma síncrona
+ * en el controller (NotificacionService + evento), no acá.
  */
 class EnviarConfirmacionReserva implements ShouldQueue
 {
@@ -54,7 +52,7 @@ class EnviarConfirmacionReserva implements ShouldQueue
             );
         }
 
-        // Email + broadcast al profesional
+        // Email al profesional
         if ($profUser) {
             $brevoMail->send(
                 $profUser->email,
@@ -62,15 +60,6 @@ class EnviarConfirmacionReserva implements ShouldQueue
                 'mail.reserva-creada',
                 ['reserva' => $reserva, 'destinatario' => 'profesional'],
             );
-
-            // Transmite en vivo al canal privado del profesional (WebSocket vía Reverb).
-            // Best-effort: si Reverb no está disponible, no debe romper el job
-            // (los emails y notificaciones ya se enviaron; reintentarlo los duplicaría).
-            try {
-                NuevaReservaProfesional::dispatch($reserva);
-            } catch (\Throwable $e) {
-                Log::warning('No se pudo transmitir NuevaReservaProfesional: ' . $e->getMessage());
-            }
         }
     }
 }

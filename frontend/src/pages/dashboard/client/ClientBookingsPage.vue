@@ -181,7 +181,7 @@ async function confirmCancelBooking(booking) {
     if (idx !== -1) bookings.value[idx] = data
     closeCancelConfirmation()
   } catch (e) {
-    cancelError.value = e.response?.data?.message ?? 'No se pudo eliminar la reserva.'
+    cancelError.value = e.response?.data?.message ?? 'No se pudo cancelar la reserva.'
   } finally {
     cancellingId.value = null
   }
@@ -304,7 +304,7 @@ async function submitReview(booking) {
                 :disabled="cancelConfirmationId === b.id"
                 @click="openCancelConfirmation(b)"
               >
-                Eliminar reserva
+                Cancelar reserva
               </AppButton>
 
               <AppButton
@@ -352,7 +352,7 @@ async function submitReview(booking) {
                       :loading="cancellingId === b.id"
                       @click="confirmCancelBooking(b)"
                     >
-                      {{ cancellingId === b.id ? 'Eliminando...' : 'Eliminar reserva' }}
+                      {{ cancellingId === b.id ? 'Cancelando...' : 'Cancelar reserva' }}
                     </AppButton>
                     <AppButton variant="outline" size="sm" @click="closeCancelConfirmation">
                       Volver

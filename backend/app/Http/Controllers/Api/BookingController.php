@@ -7,6 +7,9 @@ use App\Enums\Modalidad;
 use App\Enums\PaymentStatus;
 use App\Enums\ServiceType;
 use App\Enums\UserRole;
+use App\Events\NuevaReservaProfesional;
+use App\Events\ReservaCancelada;
+use App\Events\ReservaReagendada;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\BookingResource;
 use App\Jobs\EnviarCancelacionReserva;
@@ -23,6 +26,7 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -104,7 +108,7 @@ class BookingController extends Controller
 
         $fechaHora = Carbon::parse($datos['fecha_hora']);
 
-        return DB::transaction(function () use ($datos, $fechaHora, $usuario) {
+        $reserva = DB::transaction(function () use ($datos, $fechaHora, $usuario): Booking {
             // Lock pesimista sobre el profesional: serializa TODAS sus reservas, de modo que
             // dos clientes no puedan tomar el mismo horario en paralelo (aunque sea con
             // servicios distintos). Debe ir antes del lock del servicio para mantener un
@@ -196,13 +200,19 @@ class BookingController extends Controller
 
             $reserva->load(['service', 'professionalProfile.user', 'payment']);
 
-            // Notificación in-app SÍNCRONA (aparece al instante en el badge aunque
-            // la cola no esté corriendo). El email + broadcast siguen async tras el commit.
-            $this->notificaciones->reservaCreada($reserva);
-            EnviarConfirmacionReserva::dispatch($reserva->id)->afterCommit();
-
-            return response()->json(new BookingResource($reserva), 201);
+            return $reserva;
         });
+
+        // Tras el commit (side-effects fuera de la transacción):
+        // 1) Notificación in-app síncrona (aparece al instante en el badge).
+        // 2) Broadcast en vivo síncrono al profesional (no pasa por la cola, así
+        //    no depende del worker y llega al instante).
+        // 3) Email asincrónico por cola.
+        $this->notificaciones->reservaCreada($reserva);
+        $this->transmitir(fn () => NuevaReservaProfesional::dispatch($reserva));
+        EnviarConfirmacionReserva::dispatch($reserva->id);
+
+        return response()->json(new BookingResource($reserva), 201);
     }
 
     public function cancel(Request $request, int $id): JsonResponse
@@ -252,7 +262,8 @@ class BookingController extends Controller
         $reserva->refresh()->load(['service', 'professionalProfile.user', 'payment']);
 
         $this->notificaciones->reservaCancelada($reserva);
-        EnviarCancelacionReserva::dispatch($reserva->id)->afterCommit();
+        $this->transmitir(fn () => ReservaCancelada::dispatch($reserva));
+        EnviarCancelacionReserva::dispatch($reserva->id);
 
         return response()->json(new BookingResource($reserva));
     }
@@ -315,7 +326,8 @@ class BookingController extends Controller
         $reserva->refresh()->load(['service', 'professionalProfile.user', 'payment']);
 
         $this->notificaciones->reservaReagendada($reserva, $fechaAnterior);
-        EnviarReagendacionReserva::dispatch($reserva->id, $fechaAnterior)->afterCommit();
+        $this->transmitir(fn () => ReservaReagendada::dispatch($reserva, $fechaAnterior));
+        EnviarReagendacionReserva::dispatch($reserva->id, $fechaAnterior);
 
         return response()->json(new BookingResource($reserva));
     }
@@ -393,5 +405,18 @@ class BookingController extends Controller
         }
 
         abort(403);
+    }
+
+    /**
+     * Emite un evento de broadcast (WebSocket) en vivo de forma best-effort.
+     * Si Reverb no está disponible, se loguea y no se rompe la request.
+     */
+    private function transmitir(\Closure $emitir): void
+    {
+        try {
+            $emitir();
+        } catch (\Throwable $e) {
+            Log::warning('No se pudo transmitir evento en tiempo real: ' . $e->getMessage());
+        }
     }
 }
