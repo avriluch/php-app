@@ -14,11 +14,22 @@ const loading = ref(true)
 const error = ref(null)
 const bookings = ref([])
 
-// id de la reserva con el form de reseña abierto
+// =========================
+// PAGINACIÓN
+// =========================
+const page = ref(1)
+const perPage = ref(15)
+const lastPage = ref(1)
+
+// =========================
+// RESERVAS / UI STATE
+// =========================
+
 const reviewingId = ref(null)
 const reviewForm = ref({ puntaje: 0, comentario: '' })
 const reviewSubmitting = ref(false)
 const reviewError = ref(null)
+
 const cancellingId = ref(null)
 const cancelConfirmationId = ref(null)
 const cancelError = ref(null)
@@ -32,7 +43,12 @@ const selectedSlot = ref(null)
 const slotsLoading = ref(false)
 const rescheduleLoading = ref(false)
 const rescheduleError = ref(null)
+
 const today = new Date().toISOString().split('T')[0]
+
+// =========================
+// CONFIG
+// =========================
 
 const estadoConfig = {
   pendiente:   { label: 'Pendiente',   variant: 'default', icon: AlertCircle },
@@ -44,13 +60,29 @@ const estadoConfig = {
   no_asistida: { label: 'No asistida', variant: 'danger',  icon: XCircle },
 }
 
-const modalidadLabel = (m) => ({ virtual: 'Virtual', presencial: 'Presencial', hibrida: 'Híbrida' }[m] ?? m)
+const modalidadLabel = (m) =>
+  ({ virtual: 'Virtual', presencial: 'Presencial', hibrida: 'Híbrida' }[m] ?? m)
 
-const formatFecha = (iso) => new Date(iso).toLocaleDateString('es-UY', {
-  weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-})
-const formatHora = (iso) => new Date(iso).toLocaleTimeString('es-UY', { hour: '2-digit', minute: '2-digit' })
-const formatPrice = (n) => new Intl.NumberFormat('es-UY', { style: 'currency', currency: 'UYU' }).format(n)
+const formatFecha = (iso) =>
+  new Date(iso).toLocaleDateString('es-UY', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+
+const formatHora = (iso) =>
+  new Date(iso).toLocaleTimeString('es-UY', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+
+const formatPrice = (n) =>
+  new Intl.NumberFormat('es-UY', { style: 'currency', currency: 'UYU' }).format(n)
+
+// =========================
+// REGLAS
+// =========================
 
 const canCancelBooking = (booking) => {
   const isCancelableState = ['pendiente', 'confirmada', 'pagada'].includes(booking.estado)
@@ -64,14 +96,64 @@ const canRescheduleBooking = (booking) => {
   return isReschedulableState && isInFuture
 }
 
+// =========================
+// FETCH BOOKINGS (PAGINADO)
+// =========================
+
+async function fetchBookings() {
+  loading.value = true
+  error.value = null
+
+  try {
+    const { data } = await api.get('/bookings', {
+      params: {
+        page: page.value,
+        per_page: perPage.value,
+      },
+    })
+
+    bookings.value = data.data ?? []
+
+    // soporta Laravel paginator o fallback
+    lastPage.value = data.meta?.last_page ?? data.last_page ?? 1
+
+  } catch (e) {
+    error.value = e.response?.data?.message ?? 'No se pudieron cargar las reservas.'
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(fetchBookings)
+watch(page, fetchBookings)
+
+// =========================
+// PAGINACIÓN ACTIONS
+// =========================
+
+function nextPage() {
+  if (page.value < lastPage.value) page.value++
+}
+
+function prevPage() {
+  if (page.value > 1) page.value--
+}
+
+// =========================
+// RESCHEDULE
+// =========================
+
 function openReschedule(booking) {
   reschedulingId.value = booking.id
   reschedulingBooking.value = booking
+
   const fecha = new Date(booking.fecha_hora)
   rescheduleForm.value = { fecha: fecha.toISOString().split('T')[0] }
+
   selectedSlot.value = null
   slots.value = []
   rescheduleError.value = null
+
   loadRescheduleSlots(rescheduleForm.value.fecha)
 }
 
@@ -85,16 +167,26 @@ function closeReschedule() {
 
 async function loadRescheduleSlots(fecha) {
   if (!reschedulingBooking.value || !fecha) return
+
   slots.value = []
   selectedSlot.value = null
   slotsLoading.value = true
 
   try {
-    const { data } = await api.get(`/professionals/${reschedulingBooking.value.professional.id}/availability`, {
-      params: { service_id: reschedulingBooking.value.service.id, from: fecha, to: fecha },
-    })
+    const { data } = await api.get(
+      `/professionals/${reschedulingBooking.value.professional.id}/availability`,
+      {
+        params: {
+          service_id: reschedulingBooking.value.service.id,
+          from: fecha,
+          to: fecha,
+        },
+      }
+    )
+
     const ahora = Date.now()
-    slots.value = (data.slots ?? []).map((slot) => ({
+
+    slots.value = (data.slots ?? []).map(slot => ({
       ...slot,
       available: slot.available && new Date(slot.start).getTime() > ahora,
     }))
@@ -114,8 +206,10 @@ async function confirmReschedule(booking) {
   }
 
   const diffMs = new Date(selectedSlot.value.start).getTime() - Date.now()
+
   if (diffMs < 24 * 60 * 60 * 1000) {
-    rescheduleError.value = 'La reserva debe reagendarse con al menos 24 horas de anticipación.'
+    rescheduleError.value =
+      'La reserva debe reagendarse con al menos 24 horas de anticipación.'
     return
   }
 
@@ -127,39 +221,21 @@ async function confirmReschedule(booking) {
       fecha_hora: selectedSlot.value.start,
     })
 
-    const idx = bookings.value.findIndex((b) => b.id === booking.id)
+    const idx = bookings.value.findIndex(b => b.id === booking.id)
     if (idx !== -1) bookings.value[idx] = data
+
     closeReschedule()
   } catch (e) {
-    rescheduleError.value = e.response?.data?.message ?? e.message ?? 'No se pudo reagendar la reserva.'
+    rescheduleError.value =
+      e.response?.data?.message ?? e.message ?? 'No se pudo reagendar la reserva.'
   } finally {
     rescheduleLoading.value = false
   }
 }
 
-onMounted(async () => {
-  loading.value = true
-  error.value = null
-  try {
-    const { data } = await api.get('/bookings')
-    bookings.value = data.data ?? []
-  } catch (e) {
-    error.value = e.response?.data?.message ?? 'No se pudieron cargar las reservas.'
-  } finally {
-    loading.value = false
-  }
-})
-
-function openReview(bookingId) {
-  reviewingId.value = bookingId
-  reviewForm.value = { puntaje: 0, comentario: '' }
-  reviewError.value = null
-}
-
-function closeReview() {
-  reviewingId.value = null
-  reviewError.value = null
-}
+// =========================
+// CANCELAR
+// =========================
 
 function openCancelConfirmation(booking) {
   cancelConfirmationId.value = booking.id
@@ -179,6 +255,7 @@ async function confirmCancelBooking(booking) {
     const { data } = await api.patch(`/bookings/${booking.id}/cancel`)
     const idx = bookings.value.findIndex(b => b.id === booking.id)
     if (idx !== -1) bookings.value[idx] = data
+
     closeCancelConfirmation()
   } catch (e) {
     cancelError.value = e.response?.data?.message ?? 'No se pudo cancelar la reserva.'
@@ -187,17 +264,36 @@ async function confirmCancelBooking(booking) {
   }
 }
 
+// =========================
+// RESEÑAS
+// =========================
+
+function openReview(bookingId) {
+  reviewingId.value = bookingId
+  reviewForm.value = { puntaje: 0, comentario: '' }
+  reviewError.value = null
+}
+
+function closeReview() {
+  reviewingId.value = null
+  reviewError.value = null
+}
+
 async function submitReview(booking) {
   if (!reviewForm.value.puntaje) {
     reviewError.value = 'Seleccioná una puntuación.'
     return
   }
+
   reviewSubmitting.value = true
   reviewError.value = null
+
   try {
     const { data } = await api.post(`/bookings/${booking.id}/review`, reviewForm.value)
+
     const idx = bookings.value.findIndex(b => b.id === booking.id)
     if (idx !== -1) bookings.value[idx] = { ...bookings.value[idx], review: data }
+
     closeReview()
   } catch (e) {
     reviewError.value = e.response?.data?.message ?? 'No se pudo enviar la reseña.'
@@ -476,5 +572,33 @@ async function submitReview(booking) {
         </div>
       </AppCard>
     </div>
+    
+     <div 
+      v-if="!loading && bookings.length > 0 && lastPage > 1"
+     class="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-3 mt-6">
+  <AppButton
+    variant="outline"
+    size="sm"
+    class="w-auto px-4 sm:w-auto"
+    @click="prevPage"
+    :disabled="page === 1"
+  >
+    Anterior
+  </AppButton>
+
+  <span class="text-sm">
+  Página {{ page }} de {{ lastPage }}
+</span>
+
+  <AppButton
+    variant="outline"
+    size="sm"
+    class="w-auto px-4 sm:w-auto"
+    @click="nextPage"
+    :disabled="page === lastPage"
+  >
+    Siguiente
+  </AppButton>
+</div>
   </div>
 </template>
