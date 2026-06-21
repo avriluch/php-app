@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\Modalidad;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ProfessionalDetailResource;
 use App\Http\Resources\ProfessionalListResource;
@@ -9,6 +10,7 @@ use App\Http\Resources\ServiceResource;
 use App\Models\ProfessionalProfile;
 use App\Models\Service;
 use App\Services\AvailabilityService;
+use App\Services\ProfessionalLocationResolver;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -17,7 +19,7 @@ use Illuminate\Validation\Rule;
 
 class ProfessionalController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    public function index(Request $request, ProfessionalLocationResolver $ubicaciones): JsonResponse
     {
         $query = $this->baseQuery();
 
@@ -66,9 +68,9 @@ class ProfessionalController extends Controller
             });
         }
 
-        // Filtros sobre ubicación del profesional.
-        if ($ciudad = $request->string('ciudad')->toString()) {
-            $query->whereHas('location', fn (Builder $q) => $q->where('ciudad', 'like', '%' . $ciudad . '%'));
+        // Filtros sobre ubicación del perfil o de servicios presenciales/híbridos.
+        if ($ciudad = $request->string('ciudad')->trim()->toString()) {
+            $ubicaciones->applyCiudadFilter($query, $ciudad);
         }
         if ($pais = $request->string('pais')->toString()) {
             $query->whereHas('location', fn (Builder $q) => $q->where('pais', $pais));
@@ -86,7 +88,7 @@ class ProfessionalController extends Controller
                 'radius_km' => ['sometimes', 'numeric', 'min:1', 'max:500'],
             ]);
 
-            $this->applyProximityFilter(
+            $ubicaciones->applyProximityFilter(
                 $query,
                 (float) $lat,
                 (float) $lng,
@@ -114,8 +116,9 @@ class ProfessionalController extends Controller
             perPage: min((int) $request->input('per_page', 15), 50)
         );
 
-        $profiles->getCollection()->transform(function (ProfessionalProfile $profile) {
+        $profiles->getCollection()->transform(function (ProfessionalProfile $profile) use ($ubicaciones) {
             $profile->modalidades = $this->modalidadesPara($profile);
+            $profile->setRelation('location', $ubicaciones->displayLocation($profile));
 
             return $profile;
         });
@@ -248,32 +251,20 @@ class ProfessionalController extends Controller
         ];
     }
 
-    /**
-     * Filtra profesionales dentro de un radio (km) usando la fórmula de Haversine.
-     */
-    private function applyProximityFilter(Builder $query, float $lat, float $lng, float $radiusKm): void
-    {
-        $inner = 'cos(radians(' . $lat . ')) * cos(radians(locations.latitud))'
-            . ' * cos(radians(locations.longitud) - radians(' . $lng . '))'
-            . ' + sin(radians(' . $lat . ')) * sin(radians(locations.latitud))';
-
-        $clamped = config('database.default') === 'sqlite'
-            ? "(CASE WHEN ({$inner}) > 1 THEN 1 WHEN ({$inner}) < -1 THEN -1 ELSE ({$inner}) END)"
-            : "LEAST(1.0, GREATEST(-1.0, ({$inner})))";
-
-        $haversine = "(6371 * acos({$clamped}))";
-
-        $query->whereNotNull('professional_profiles.location_id')
-            ->join('locations', 'professional_profiles.location_id', '=', 'locations.id')
-            ->select('professional_profiles.*')
-            ->selectRaw("{$haversine} AS distance_km")
-            ->whereRaw("{$haversine} <= ?", [$radiusKm]);
-    }
-
     private function baseQuery(): Builder
     {
         return ProfessionalProfile::query()
-            ->with(['user', 'location'])
+            ->with([
+                'user',
+                'location',
+                'services' => function ($q) {
+                    $q->where('activo', true)
+                        ->whereNotNull('location_id')
+                        ->whereIn('modalidad', [Modalidad::Presencial->value, Modalidad::Hibrida->value])
+                        ->with('location')
+                        ->orderByDesc('updated_at');
+                },
+            ])
             ->withAvg('reviews', 'puntaje')
             ->withCount('reviews')
             ->withMin(['services as precio_desde' => fn (Builder $q) => $q->where('activo', true)], 'precio')

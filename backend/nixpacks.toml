@@ -1,0 +1,3 @@
+# Railway/Nixpacks: extensiones PHP necesarias (avatares, validación de imágenes).
+[phases.setup]
+nixPkgs = ["...", "php82Extensions.gd"]

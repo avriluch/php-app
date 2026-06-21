@@ -6,6 +6,7 @@ use App\Enums\Modalidad;
 use App\Enums\ServiceType;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ServiceResource;
+use App\Models\ProfessionalProfile;
 use App\Models\Service;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -51,7 +52,7 @@ class ServiceController extends Controller
 
         $servicio = Service::create([
             'professional_profile_id' => $perfil->id,
-            'type' => $datos['type'],
+            'type' => ServiceType::from($datos['type']),
             'nombre' => $datos['nombre'],
             'descripcion' => $datos['descripcion'] ?? null,
             'duracion' => $datos['duracion'] ?? null,
@@ -65,6 +66,8 @@ class ServiceController extends Controller
         ]);
 
         $servicio->load('location');
+
+        $this->syncProfileLocation($perfil, $servicio);
 
         return response()->json(new ServiceResource($servicio), 201);
     }
@@ -82,7 +85,9 @@ class ServiceController extends Controller
 
         foreach (['type', 'nombre', 'descripcion', 'duracion', 'precio', 'modalidad', 'location_id', 'cantidad_sesiones', 'activo'] as $campo) {
             if (array_key_exists($campo, $datos)) {
-                $servicio->{$campo} = $datos[$campo];
+                $servicio->{$campo} = $campo === 'type'
+                    ? ServiceType::from($datos['type'])
+                    : $datos[$campo];
             }
         }
 
@@ -93,6 +98,8 @@ class ServiceController extends Controller
 
         $servicio->save();
         $servicio->load('location');
+
+        $this->syncProfileLocation($perfil, $servicio);
 
         return response()->json(new ServiceResource($servicio));
     }
@@ -171,5 +178,24 @@ class ServiceController extends Controller
         }
 
         return true;
+    }
+
+    private function syncProfileLocation(ProfessionalProfile $perfil, Service $servicio): void
+    {
+        $modalidad = $servicio->modalidad instanceof Modalidad
+            ? $servicio->modalidad->value
+            : (string) $servicio->modalidad;
+
+        if (! in_array($modalidad, [Modalidad::Presencial->value, Modalidad::Hibrida->value], true)) {
+            return;
+        }
+
+        if (! $servicio->location_id) {
+            return;
+        }
+
+        if ((int) $perfil->location_id !== (int) $servicio->location_id) {
+            $perfil->update(['location_id' => $servicio->location_id]);
+        }
     }
 }
