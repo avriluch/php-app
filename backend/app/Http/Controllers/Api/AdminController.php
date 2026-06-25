@@ -115,12 +115,18 @@ class AdminController extends Controller
     /**
      * Feed unificado de actividad reciente: registros, reservas y pagos,
      * ordenados del más nuevo al más viejo.
+     *
+     * Acepta ?limit=N (default 12, máx 500) para que el panel pueda mostrar
+     * solo lo más reciente o expandirse a "Ver todo".
      */
-    public function activity(): JsonResponse
+    public function activity(Request $request): JsonResponse
     {
+        $limit = (int) $request->input('limit', 12);
+        $limit = max(1, min($limit, 500));
+
         $usuarios = User::query()
             ->latest()
-            ->limit(8)
+            ->limit($limit)
             ->get(['id', 'nombre', 'apellido', 'role', 'created_at'])
             ->map(fn (User $u) => [
                 'tipo' => 'usuario',
@@ -132,7 +138,7 @@ class AdminController extends Controller
         $reservas = Booking::query()
             ->with(['client:id,nombre,apellido', 'service:id,nombre'])
             ->latest()
-            ->limit(8)
+            ->limit($limit)
             ->get()
             ->map(fn (Booking $b) => [
                 'tipo' => 'reserva',
@@ -146,7 +152,7 @@ class AdminController extends Controller
         $pagos = Payment::query()
             ->where('estado', PaymentStatus::Completado->value)
             ->latest()
-            ->limit(8)
+            ->limit($limit)
             ->get()
             ->map(fn (Payment $p) => [
                 'tipo' => 'pago',
@@ -157,7 +163,7 @@ class AdminController extends Controller
 
         $feed = $usuarios->concat($reservas)->concat($pagos)
             ->sortByDesc('timestamp')
-            ->take(12)
+            ->take($limit)
             ->map(fn (array $item) => collect($item)->except('timestamp')->all())
             ->values()
             ->all();

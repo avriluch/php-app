@@ -223,6 +223,12 @@ const router = createRouter({
           component: () => import('@/pages/admin/AdminUsersPage.vue'),
         },
         {
+          path: 'bookings',
+          name: 'admin-bookings',
+          component: () => import('@/pages/admin/AdminBookingsPage.vue'),
+          meta: { pageTitle: 'Reservas', pageDescription: 'Todas las reservas de la plataforma.' },
+        },
+        {
           path: 'settings',
           name: 'admin-settings',
           component: () => import('@/pages/admin/AdminSettingsPage.vue'),

@@ -1,5 +1,6 @@
 <script setup>
 import { ref, watch, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { Search, UserPlus, Ban, RotateCcw, ChevronDown } from '@lucide/vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
@@ -15,13 +16,21 @@ defineProps({
 
 const auth = useAuthStore()
 const ui = useUIStore()
+const route = useRoute()
+
+// Permite preseleccionar el filtro vía ?role=client|professional|admin
+// (lo usa el panel admin cuando se clickea la card "Profesionales").
+const ROLES_VALIDOS = ['client', 'professional', 'admin']
+const roleFromQuery = typeof route.query.role === 'string' && ROLES_VALIDOS.includes(route.query.role)
+  ? route.query.role
+  : ''
 
 const loading = ref(true)
 const error = ref(null)
 const users = ref([])
 const meta = ref({ current_page: 1, last_page: 1, total: 0 })
 const search = ref('')
-const roleFilter = ref('')
+const roleFilter = ref(roleFromQuery)
 const page = ref(1)
 const busyId = ref(null)
 
@@ -99,6 +108,18 @@ watch(roleFilter, () => {
   load()
 })
 watch(page, load)
+
+// Si la URL cambia (?role=...) mientras seguimos en esta misma vista,
+// alineamos el filtro. El watch de roleFilter de arriba se encarga de recargar.
+watch(
+  () => route.query.role,
+  (nuevo) => {
+    const valor = typeof nuevo === 'string' && ROLES_VALIDOS.includes(nuevo) ? nuevo : ''
+    if (valor !== roleFilter.value) {
+      roleFilter.value = valor
+    }
+  },
+)
 
 function goToPage(p) {
   if (p >= 1 && p <= meta.value.last_page) page.value = p

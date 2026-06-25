@@ -1,6 +1,10 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { Users, Briefcase, CalendarCheck, Wallet, TrendingUp, UserPlus, Clock } from '@lucide/vue'
+import { RouterLink } from 'vue-router'
+import {
+  Users, Briefcase, CalendarCheck, Wallet, TrendingUp, UserPlus, Clock,
+  ChevronRight, ChevronDown, ChevronUp,
+} from '@lucide/vue'
 import api from '@/services/api'
 import AppCard from '@/components/ui/AppCard.vue'
 import AppSpinner from '@/components/ui/AppSpinner.vue'
@@ -17,10 +21,38 @@ const stats = computed(() => {
   const m = metrics.value
   if (!m) return []
   return [
-    { label: 'Usuarios registrados', value: m.usuarios.total, hint: `+${m.usuarios.nuevos_mes} este mes`, icon: Users, color: 'text-primary-600 bg-primary-50' },
-    { label: 'Profesionales', value: m.profesionales.total, hint: `${m.profesionales.con_servicios} con servicios`, icon: Briefcase, color: 'text-accent-600 bg-accent-50' },
-    { label: 'Reservas este mes', value: m.reservas.total_mes, hint: `${m.reservas.canceladas_mes} canceladas`, icon: CalendarCheck, color: 'text-purple-600 bg-purple-50' },
-    { label: 'Ingresos del mes', value: money(m.ingresos.mes), hint: `${money(m.ingresos.total)} histórico`, icon: Wallet, color: 'text-emerald-600 bg-emerald-50' },
+    {
+      label: 'Usuarios registrados',
+      value: m.usuarios.total,
+      hint: `+${m.usuarios.nuevos_mes} este mes`,
+      icon: Users,
+      color: 'text-primary-600 bg-primary-50',
+      to: '/admin/users',
+    },
+    {
+      label: 'Profesionales',
+      value: m.profesionales.total,
+      hint: `${m.profesionales.con_servicios} con servicios`,
+      icon: Briefcase,
+      color: 'text-accent-600 bg-accent-50',
+      to: { path: '/admin/users', query: { role: 'professional' } },
+    },
+    {
+      label: 'Reservas este mes',
+      value: m.reservas.total_mes,
+      hint: `${m.reservas.canceladas_mes} canceladas`,
+      icon: CalendarCheck,
+      color: 'text-purple-600 bg-purple-50',
+      to: '/admin/bookings',
+    },
+    {
+      label: 'Ingresos del mes',
+      value: money(m.ingresos.mes),
+      hint: `${money(m.ingresos.total)} histórico`,
+      icon: Wallet,
+      color: 'text-emerald-600 bg-emerald-50',
+      to: null,
+    },
   ]
 })
 
@@ -58,6 +90,9 @@ const bookingsByStatus = computed(() => {
 // ── Actividad reciente ────────────────────────────────────────────
 const activity = ref([])
 const activityLoading = ref(true)
+const activityShowAll = ref(false)
+const ACTIVITY_LIMIT_COMPACT = 12
+const ACTIVITY_LIMIT_FULL = 500
 
 const activityMeta = {
   usuario: { icon: UserPlus, color: 'text-blue-600 bg-blue-50' },
@@ -94,13 +129,22 @@ async function load() {
 async function loadActivity() {
   activityLoading.value = true
   try {
-    const { data } = await api.get('/admin/activity')
+    const { data } = await api.get('/admin/activity', {
+      params: {
+        limit: activityShowAll.value ? ACTIVITY_LIMIT_FULL : ACTIVITY_LIMIT_COMPACT,
+      },
+    })
     activity.value = data.data ?? []
   } catch {
     activity.value = []
   } finally {
     activityLoading.value = false
   }
+}
+
+async function toggleActivity() {
+  activityShowAll.value = !activityShowAll.value
+  await loadActivity()
 }
 
 onMounted(() => {
@@ -123,20 +167,45 @@ onMounted(() => {
     <p v-else-if="error" class="text-red-600 text-sm">{{ error }}</p>
 
     <template v-else>
-      <!-- Tarjetas -->
+      <!-- Tarjetas (las 3 primeras son clickeables, llevan a una vista detallada) -->
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <AppCard v-for="stat in stats" :key="stat.label" padding="sm">
-          <div class="flex items-center gap-3">
-            <div :class="['w-9 h-9 rounded-xl flex items-center justify-center shrink-0', stat.color]">
-              <component :is="stat.icon" class="w-4 h-4" />
+        <component
+          :is="stat.to ? RouterLink : 'div'"
+          v-for="stat in stats"
+          :key="stat.label"
+          :to="stat.to ?? undefined"
+          :class="[
+            'block no-underline h-full',
+            stat.to ? 'group' : '',
+          ]"
+        >
+          <AppCard
+            padding="sm"
+            :class="[
+              'h-full',
+              stat.to
+                ? 'transition-all duration-150 group-hover:shadow-md group-hover:border-primary-200 cursor-pointer'
+                : '',
+            ]"
+          >
+            <div class="flex items-center gap-3">
+              <div :class="['w-9 h-9 rounded-xl flex items-center justify-center shrink-0', stat.color]">
+                <component :is="stat.icon" class="w-4 h-4" />
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="text-xl font-bold text-neutral-900 truncate">{{ stat.value }}</p>
+                <p class="text-xs text-neutral-500 flex items-center gap-1">
+                  {{ stat.label }}
+                  <ChevronRight
+                    v-if="stat.to"
+                    class="w-3 h-3 text-neutral-300 opacity-0 -translate-x-1 transition-all duration-150 group-hover:opacity-100 group-hover:translate-x-0"
+                  />
+                </p>
+                <p class="text-[11px] text-neutral-400 mt-0.5">{{ stat.hint }}</p>
+              </div>
             </div>
-            <div class="min-w-0">
-              <p class="text-xl font-bold text-neutral-900 truncate">{{ stat.value }}</p>
-              <p class="text-xs text-neutral-500">{{ stat.label }}</p>
-              <p class="text-[11px] text-neutral-400 mt-0.5">{{ stat.hint }}</p>
-            </div>
-          </div>
-        </AppCard>
+          </AppCard>
+        </component>
       </div>
 
       <div class="grid lg:grid-cols-2 gap-4">
@@ -178,9 +247,25 @@ onMounted(() => {
 
       <!-- Actividad reciente -->
       <AppCard class="mt-4">
-        <h2 class="font-semibold text-neutral-900 mb-4 flex items-center gap-2">
-          <Clock class="w-4 h-4 text-neutral-400" /> Actividad reciente
-        </h2>
+        <div class="flex items-center justify-between mb-4 gap-3 flex-wrap">
+          <h2 class="font-semibold text-neutral-900 flex items-center gap-2">
+            <Clock class="w-4 h-4 text-neutral-400" />
+            Actividad reciente
+            <span v-if="activity.length" class="text-xs font-normal text-neutral-400">
+              ({{ activity.length }})
+            </span>
+          </h2>
+          <button
+            v-if="activity.length > 0 || activityShowAll"
+            type="button"
+            :disabled="activityLoading"
+            class="inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            @click="toggleActivity"
+          >
+            <component :is="activityShowAll ? ChevronUp : ChevronDown" class="w-3.5 h-3.5" />
+            {{ activityShowAll ? 'Mostrar menos' : 'Ver todo' }}
+          </button>
+        </div>
 
         <div v-if="activityLoading" class="flex justify-center py-8">
           <AppSpinner />
@@ -190,7 +275,11 @@ onMounted(() => {
           Todavía no hay actividad para mostrar.
         </p>
 
-        <ul v-else class="divide-y divide-neutral-50">
+        <ul
+          v-else
+          class="divide-y divide-neutral-50"
+          :class="activityShowAll ? 'max-h-[60vh] overflow-y-auto pr-1' : ''"
+        >
           <li v-for="(item, i) in activity" :key="i" class="flex items-center gap-3 py-2.5">
             <div
               :class="['w-8 h-8 rounded-lg flex items-center justify-center shrink-0', (activityMeta[item.tipo] ?? activityMeta.usuario).color]"
