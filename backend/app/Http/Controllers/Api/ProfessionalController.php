@@ -112,8 +112,12 @@ class ProfessionalController extends Controller
             $query->orderByDesc('reviews_avg_puntaje');
         }
 
+        // per_page default y tope subidos: el listado se acompaña de un mapa,
+        // entonces necesitamos devolver una cantidad razonable en la primera
+        // página (si no, el mapa muestra muy poquitos). El front pagina con
+        // "Cargar más" si hay más resultados.
         $profiles = $query->paginate(
-            perPage: min((int) $request->input('per_page', 15), 50)
+            perPage: min((int) $request->input('per_page', 48), 200)
         );
 
         $profiles->getCollection()->transform(function (ProfessionalProfile $profile) use ($ubicaciones) {
@@ -150,7 +154,11 @@ class ProfessionalController extends Controller
 
     public function services(int $id): JsonResponse
     {
-        $perfil = ProfessionalProfile::findOrFail($id);
+        $perfil = ProfessionalProfile::with('user')->findOrFail($id);
+
+        // Si el profesional eliminó su cuenta no debe ser localizable para
+        // armar nuevas reservas.
+        abort_unless($perfil->user && $perfil->user->activo, 404);
 
         $servicios = $perfil->services()
             ->where('activo', true)
@@ -171,7 +179,16 @@ class ProfessionalController extends Controller
             'to' => ['required', 'date', 'after_or_equal:from'],
         ]);
 
-        $perfil = ProfessionalProfile::with('agenda')->findOrFail($id);
+        $perfil = ProfessionalProfile::with('agenda', 'user')->findOrFail($id);
+
+        // Si el profesional eliminó su cuenta, no hay slots posibles.
+        if (! $perfil->user || ! $perfil->user->activo) {
+            return response()->json([
+                'slots' => [],
+                'inactivo' => true,
+                'mensaje' => 'Este profesional ya no está disponible.',
+            ]);
+        }
 
         if (! $perfil->agenda) {
             return response()->json([
@@ -268,7 +285,9 @@ class ProfessionalController extends Controller
             ->withAvg('reviews', 'puntaje')
             ->withCount('reviews')
             ->withMin(['services as precio_desde' => fn (Builder $q) => $q->where('activo', true)], 'precio')
-            ->whereHas('user')
+            // Solo profesionales con cuenta activa: si un profesional elimina su cuenta
+            // (activo=false), deja de aparecer en cualquier listado o detalle público.
+            ->whereHas('user', fn (Builder $q) => $q->where('activo', true))
             ->whereHas('services', fn (Builder $q) => $q->where('activo', true));
     }
 

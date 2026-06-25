@@ -119,7 +119,18 @@ class BookingController extends Controller
             // dos clientes no puedan tomar el mismo horario en paralelo (aunque sea con
             // servicios distintos). Debe ir antes del lock del servicio para mantener un
             // orden de bloqueo consistente y evitar deadlocks.
-            ProfessionalProfile::lockForUpdate()->findOrFail($datos['professional_id']);
+            $perfilProf = ProfessionalProfile::with('user')
+                ->lockForUpdate()
+                ->findOrFail($datos['professional_id']);
+
+            // Si el profesional eliminó su cuenta (activo=false), no aceptamos
+            // nuevas reservas. Esto cubre el caso en que un cliente esté en mitad
+            // del flujo de reserva justo cuando el profesional se da de baja.
+            if (! $perfilProf->user || ! $perfilProf->user->activo) {
+                throw ValidationException::withMessages([
+                    'professional_id' => 'Este profesional ya no está disponible.',
+                ]);
+            }
 
             $servicio = Service::lockForUpdate()->findOrFail($datos['service_id']);
 

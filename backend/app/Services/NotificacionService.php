@@ -71,6 +71,33 @@ class NotificacionService
         }
     }
 
+    /**
+     * Cliente recibe aviso de que su reserva fue cancelada porque el profesional
+     * eliminó su cuenta. No notificamos al profesional (ya se fue).
+     */
+    public function reservaCanceladaPorProfesionalEliminado(Booking $reserva): void
+    {
+        $reserva->loadMissing(['client', 'service', 'professionalProfile.user']);
+
+        $cliente = $reserva->client;
+        if (! $cliente) {
+            return;
+        }
+
+        $fecha = $reserva->fecha_hora?->format('d/m/Y H:i');
+        $servicio = $reserva->service?->nombre ?? 'tu reserva';
+        $profUser = $reserva->professionalProfile?->user;
+        $profNombre = trim(($profUser?->nombre ?? '') . ' ' . ($profUser?->apellido ?? ''));
+        $detalle = $profNombre !== '' ? " con {$profNombre}" : '';
+
+        $this->crear(
+            $cliente->id,
+            $reserva->id,
+            NotificationType::Cancelacion,
+            "Tu reserva de {$servicio}{$detalle} del {$fecha} fue cancelada: el profesional ya no está disponible.",
+        );
+    }
+
     public function reservaReagendada(Booking $reserva, ?string $fechaAnterior = null): void
     {
         $reserva->loadMissing(['client', 'professionalProfile.user']);

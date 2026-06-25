@@ -10,10 +10,18 @@ import AppAvatar from '@/components/ui/AppAvatar.vue'
 import AppSpinner from '@/components/ui/AppSpinner.vue'
 import ProfessionalsMap from '@/components/ui/ProfessionalsMap.vue'
 
+// Tamaño de página. Lo mantenemos alto para que el mapa muestre la mayoría
+// de los profesionales sin tener que clickear "Cargar más" varias veces.
+// El backend topea per_page en 200; si en el futuro hay más resultados se
+// pagina con el botón "Cargar más".
+const PAGE_SIZE = 48
+
 const loading = ref(false)
+const loadingMore = ref(false)
 const error = ref(null)
 const professionals = ref([])
 const meta = ref(null)
+const page = ref(1)
 const filtersOpen = ref(false)
 
 const route = useRoute()
@@ -46,6 +54,11 @@ const mapProfessionals = computed(() =>
 const showMap = computed(() => proximityActive.value || mapProfessionals.value.length > 0)
 const mapGroupedLocations = ref(0)
 
+const hasMore = computed(
+  () => !!meta.value && meta.value.current_page < meta.value.last_page,
+)
+const totalAvailable = computed(() => meta.value?.total ?? 0)
+
 const activeFilterCount = computed(() => {
   let count = Object.entries(filters).filter(([k, v]) => {
     if (k === 'sort' && v === 'rating') return false
@@ -72,24 +85,45 @@ function buildParams() {
     p.lat = filters.lat
     p.lng = filters.lng
     p.radius_km = filters.radius_km
-    p.per_page = 50
   }
+  p.per_page = PAGE_SIZE
+  p.page = page.value
   return p
 }
 
-async function fetchProfessionals() {
-  loading.value = true
+/**
+ * @param {boolean} append  true = "Cargar más" (concatena); false = nueva búsqueda (reemplaza)
+ */
+async function fetchProfessionals(append = false) {
+  if (append) {
+    loadingMore.value = true
+  } else {
+    loading.value = true
+    page.value = 1
+  }
   error.value = null
   try {
     const { data } = await api.get('/professionals', { params: buildParams() })
-    professionals.value = data.data ?? []
+    const nuevos = data.data ?? []
+    professionals.value = append
+      ? [...professionals.value, ...nuevos]
+      : nuevos
     meta.value = data.meta ?? null
   } catch (e) {
     error.value = e.response?.data?.message ?? 'No se pudo cargar el listado.'
-    professionals.value = []
+    if (!append) professionals.value = []
   } finally {
     loading.value = false
+    loadingMore.value = false
   }
+}
+
+async function loadMore() {
+  if (!hasMore.value || loadingMore.value) return
+  // Tomamos la página siguiente a la última realmente cargada por el servidor,
+  // así si una request falla no se pierde una página en el camino.
+  page.value = (meta.value?.current_page ?? 0) + 1
+  await fetchProfessionals(true)
 }
 
 function clearFilters() {
@@ -150,7 +184,10 @@ function debouncedFetch() {
 }
 
 watch(search, debouncedFetch)
-watch(filters, fetchProfessionals)
+// Importante envolver el callback: si pasáramos `fetchProfessionals` directo,
+// Vue le manda (newValue, oldValue) como argumentos, y el primer argumento se
+// interpretaría como el flag `append=true`, rompiendo el reset de página.
+watch(filters, () => fetchProfessionals())
 
 onMounted(() => {
   if (route.query.type === 'package' || route.query.type === 'session') {
@@ -498,8 +535,24 @@ function modalidadLabel(m) {
       </AppCard>
     </div>
 
-    <p v-if="meta?.total" class="text-center text-sm text-neutral-500 mt-8">
-      {{ meta.total }} profesional{{ meta.total !== 1 ? 'es' : '' }} encontrado{{ meta.total !== 1 ? 's' : '' }}
-    </p>
+    <!-- Botón "Cargar más" + contador -->
+    <div v-if="!loading && !error && professionals.length > 0" class="mt-8 flex flex-col items-center gap-3">
+      <p class="text-sm text-neutral-500 text-center">
+        Mostrando {{ professionals.length }} de {{ totalAvailable }} profesional{{ totalAvailable !== 1 ? 'es' : '' }}
+      </p>
+
+      <AppButton
+        v-if="hasMore"
+        variant="outline"
+        :loading="loadingMore"
+        @click="loadMore"
+      >
+        {{ loadingMore ? 'Cargando...' : 'Cargar más' }}
+      </AppButton>
+
+      <p v-else-if="totalAvailable > PAGE_SIZE" class="text-xs text-neutral-400">
+        No hay más profesionales para mostrar.
+      </p>
+    </div>
   </div>
 </template>

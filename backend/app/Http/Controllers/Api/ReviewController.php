@@ -7,6 +7,7 @@ use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Support\ProfilePhotoUrl;
 use App\Models\Booking;
+use App\Models\ProfessionalProfile;
 use App\Models\Review;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -17,9 +18,15 @@ class ReviewController extends Controller
 {
     /**
      * Listado público de reseñas para un profesional (página detalle).
+     *
+     * Si el profesional eliminó su cuenta no es localizable por ruta pública,
+     * aunque sus reseñas siguen visibles desde las vistas históricas del cliente.
      */
     public function porProfesional(Request $request, int $professionalId): JsonResponse
     {
+        $perfil = ProfessionalProfile::with('user')->findOrFail($professionalId);
+        abort_unless($perfil->user && $perfil->user->activo, 404);
+
         $reviews = Review::with('client:id,nombre,apellido,foto_perfil')
             ->where('professional_profile_id', $professionalId)
             ->orderByDesc('fecha')
